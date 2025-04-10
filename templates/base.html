@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Heinemann Termékadatbázis{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nouislider@14.6.3/distribute/nouislider.min.css">
+    <style>
+        :root {
+            --color-text: #282828;
+            --color-secondary-text: #696969;
+            --color-background-1: #f9f9f9;
+            --color-background-2: #f4f4f4;
+            --color-border: #e5e5e5;
+            --color-button-background: #282828;
+            --color-button-background-hover: #353535;
+            --color-button-text: #f9f9f9;
+        }
+
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            color: var(--color-text);
+            background-color: var(--color-background-1);
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .content-wrapper {
+            flex: 1 0 auto;
+        }
+
+        /* Fejléc stílusok */
+        .navbar {
+            background-color: #282828;
+            border-bottom: 1px solid var(--color-border);
+            box-shadow: none;
+            padding: 1rem 0;
+        }
+
+        .navbar-brand {
+            color: #ffffff;
+            font-weight: 500;
+        }
+
+        .navbar-brand:hover {
+            color: #ffffff;
+        }
+
+        .nav-link {
+            color: #ffffff;
+            font-weight: 400;
+        }
+
+        .nav-link:hover {
+            color: #ffffff;
+            text-decoration: underline;
+        }
+
+        .nav-link.active {
+            color: #ffffff;
+            font-weight: 600;
+            position: relative;
+        }
+
+        .nav-link.active {
+            color: #aaaaaa;
+            font-weight: 600;
+        }
+
+        .dropdown-menu {
+            background-color: var(--color-background-1);
+            border: 1px solid var(--color-border);
+            border-radius: 0;
+        }
+
+        .dropdown-item {
+            color: var(--color-text);
+        }
+
+        .dropdown-item:hover {
+            background-color: var(--color-background-2);
+            color: var(--color-text);
+        }
+
+        /* Termék kártya */
+        .product-card {
+            height: 100%;
+            transition: transform 0.3s;
+            border: 1px solid var(--color-border);
+            border-radius: 0;
+            box-shadow: none;
+        }
+
+        .product-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+        }
+
+        .product-img {
+            height: 200px;
+            object-fit: contain;
+            padding: 10px;
+        }
+
+        .badge-container {
+            min-height: 30px;
+        }
+
+        /* Alkohol csúszka stílusok */
+        .noUi-connect {
+            background: var(--color-button-background);
+        }
+
+        .noUi-horizontal {
+            height: 10px;
+        }
+
+        .noUi-horizontal .noUi-handle {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            top: -6px;
+            right: -10px;
+            background-color: var(--color-button-background);
+            border: none;
+        }
+
+        .noUi-handle:before,
+        .noUi-handle:after {
+            display: none;
+        }
+
+        /* Kártya stílusok */
+        .card {
+            border: 1px solid var(--color-border);
+            border-radius: 0;
+            box-shadow: none;
+        }
+
+        .card-header {
+            background-color: #282828;
+            color: #ffffff;
+            border-bottom: 1px solid var(--color-border);
+            padding: 1rem;
+        }
+
+        .card-header h5 {
+            margin: 0;
+            font-size: 1.25rem;
+            font-weight: 500;
+        }
+
+        /* Gombok */
+        .btn {
+            border-radius: 0;
+            font-weight: 400;
+        }
+
+        .btn-primary {
+            background-color: var(--color-button-background);
+            border-color: var(--color-button-background);
+            color: var(--color-button-text);
+        }
+
+        .btn-primary:hover {
+            background-color: var(--color-button-background-hover);
+            border-color: var(--color-button-background-hover);
+        }
+
+        .btn-outline-primary {
+            border-color: var(--color-button-background);
+            color: var(--color-button-background);
+        }
+
+        .btn-outline-primary:hover {
+            background-color: var(--color-button-background);
+            border-color: var(--color-button-background);
+            color: var(--color-button-text);
+        }
+
+        /* Táblázat stílusok */
+        .table th {
+            background-color: #282828;
+            color: #ffffff;
+            font-weight: 500;
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .table td {
+            border-color: var(--color-border);
+        }
+
+        /* Űrlap elemek */
+        .form-control, .form-select {
+            background-color: var(--color-background-1);
+            border: 1px solid var(--color-border);
+            border-radius: 0;
+            color: var(--color-text);
+        }
+
+        .form-control:focus, .form-select:focus {
+            background-color: var(--color-background-1);
+            border-color: var(--color-text);
+            box-shadow: none;
+        }
+
+        /* Lábléc */
+        footer {
+            background-color: #282828;
+            color: #ffffff;
+            padding: 2rem 0;
+            margin-top: 3rem;
+            flex-shrink: 0;
+        }
+
+        footer a {
+            color: #ffffff;
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            color: #ffffff;
+            text-decoration: underline;
+        }
+    </style>
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <img src="https://cdn.shopify.com/s/files/1/0931/0401/3658/files/h-logo-white.png?v=1738073442" alt="Heinemann Logo" style="max-height: 40px;">
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Kezdőlap</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/products">Termékek</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/compare">Összehasonlítás</a>
+                    </li>
+                </ul>
+                <!-- Keresés eltávolítva -->
+            </div>
+        </div>
+    </nav>
+
+    <div class="content-wrapper">
+        <div class="container mt-4">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+
+    <footer>
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6 text-center text-md-start">
+                    <p>Heinemann Termékadatbázis &copy; 2025</p>
+                </div>
+                <div class="col-md-6 text-center text-md-end">
+                    <p>Probléma esetén: <a href="mailto:nanasi.tamas@heinemann.hu">nanasi.tamas@heinemann.hu</a></p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/nouislider@14.6.3/distribute/nouislider.min.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
