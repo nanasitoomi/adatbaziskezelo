@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Termékadatbázis - Supabase</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <!-- Esetleg Nouislider CSS, ha a szűréshez kelleni fog -->
+    <!-- <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nouislider@14.6.3/distribute/nouislider.min.css"> -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container">
+            <a class="navbar-brand" href="#" id="nav-logo">
+                <img src="https://cdn.shopify.com/s/files/1/0931/0401/3658/files/h-logo-white.png?v=1738073442" alt="Heinemann Logo" style="max-height: 40px;">
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#" id="nav-home">Kezdőlap</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" id="nav-products">Termékek</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" id="nav-compare">Összehasonlítás</a>
+                    </li>
+                    </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="content-wrapper container-fluid mt-4">
+        <!-- Ide kerül majd a dinamikusan generált tartalom (terméklista vagy összehasonlító táblázat) -->
+        <div id="app-content">
+            <!-- Main landing page content -->
+            <div class="container py-5">
+                <div class="row align-items-center mb-5">
+                    <div class="col-12 text-center">
+                        <h1 class="display-4 fw-bold mb-4">Heinemann Termékadatbázis</h1>
+                        <p class="lead mb-4">Termékek kezelése, Shopify és Business Central adatok összehasonlítása egy helyen.</p>
+                        <div class="d-flex justify-content-center flex-wrap gap-2 mb-3" id="data-badge-container">
+                            <!-- Badge tartalmat JavaScript tölti be dinamikusan a Supabase-ről -->
+                        </div>
+                        <div class="d-flex justify-content-center gap-3">
+                            <button class="btn btn-primary btn-lg" id="browse-products-btn">
+                                <i class="bi bi-search me-2"></i>Termékek böngészése
+                            </button>
+                            <button class="btn btn-outline-primary btn-lg" id="browse-compare-btn">
+                                <i class="bi bi-bar-chart-line me-2"></i>Adatok összehasonlítása
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bevezető Információ Szekció -->
+                <section class="py-4 my-4 bg-light border-top border-bottom">
+                    <div class="container">
+                        <div class="row justify-content-center">
+                            <div class="col-lg-10 text-center">
+                                <h2 class="fw-light mb-3">Híd a Rendszerek Között: Shopify és Business Central Adatok Egyesítése</h2>
+                                <p class="lead text-muted mb-4">
+                                    Ez az eszköz lehetővé teszi a két kulcsfontosságú rendszerünk – a Shopify (AI által támogatott) és a Business Central (manuálisan kezelt) – termékadatainak hatékony összevetését és harmonizálását. Célunk egy egységes, megbízható adatforrás (<strong>"single source of truth"</strong>) létrehozása, amely kiküszöböli az eltéréseket, kiegészíti a hiányosságokat és javítja az adatok pontosságát.
+                                </p>
+                                <p class="text-muted">
+                                    Használd ezt a felületet az adatok gyors ellenőrzésére, összehasonlítására, a hiányzó információk pótlására egyik rendszerből a másikba, és az esetleges hibák javítására. Az így kapott tiszta, egységesített adatállomány kompatibilis mindkét platformmal, megkönnyítve a jövőbeli szinkronizációt és növelve a munka hatékonyságát. Kérésre nagy tömegű adatműveletek futtatására is képes a rendszer.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <div class="row mt-5 pt-3">
+                    <div class="col-12 text-center mb-4">
+                        <h2>Funkciók</h2>
+                    </div>
+                    <div class="col-md-6 mb-4">
+                        <a href="#" class="text-decoration-none info-card-link" id="search-info-card">
+                            <div class="card h-100 border-0 shadow-sm hover-shadow">
+                                <div class="card-body p-4 text-center">
+                                    <div class="display-4 text-primary mb-3">
+                                        <i class="bi bi-search"></i>
+                                    </div>
+                                    <h3 class="card-title h4">Terméklista és szűrőrendszer</h3>
+                                    <p class="card-text">Gyorsan találja meg a keresett terméket név, márka, típus vagy más tulajdonságok alapján.</p>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                    <div class="col-md-6 mb-4">
+                        <a href="#" class="text-decoration-none info-card-link" id="compare-info-card">
+                            <div class="card h-100 border-0 shadow-sm hover-shadow">
+                                <div class="card-body p-4 text-center">
+                                    <div class="display-4 text-primary mb-3">
+                                        <i class="bi bi-bar-chart-line"></i>
+                                    </div>
+                                    <h3 class="card-title h4">Adatok összehasonlítása</h3>
+                                    <p class="card-text">Vesse össze a Shopify és Business Central termékadatokat egy áttekinthető nézetben.</p>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                    <div class="col-12 text-center mt-2">
+                        <p class="text-muted">
+                            <svg width="1.2em" height="1.2em" viewBox="0 0 109.5 124.5" style="vertical-align: -0.25em; margin-right: 0.3em; fill: #95BF47;">
+                                <g>
+                                    <path d="M74.7,14.8c0,0-1.4,0.4-3.7,1.1c-0.4-1.3-1-2.8-1.8-4.4c-2.6-5-6.5-7.7-11.1-7.7c0,0,0,0,0,0c-0.3,0-0.6,0-1,0.1
+                                        c-0.1-0.2-0.3-0.3-0.4-0.5c-2-2.2-4.6-3.2-7.7-3.1c-6,0.2-12,4.5-16.8,12.2c-3.4,5.4-6,12.2-6.7,17.5c-6.9,2.1-11.7,3.6-11.8,3.7
+                                        c-3.5,1.1-3.6,1.2-4,4.5C9.1,40.7,0,111.2,0,111.2l75.6,13.1V14.6C75.2,14.7,74.9,14.7,74.7,14.8z M57.2,20.2
+                                        c-4,1.2-8.4,2.6-12.7,3.9c1.2-4.7,3.6-9.4,6.4-12.5c1.1-1.1,2.6-2.4,4.3-3.2C56.9,12,57.3,16.9,57.2,20.2z M49.1,4.3
+                                        c1.4,0,2.6,0.3,3.6,0.9c-1.6,0.8-3.2,2.1-4.7,3.6c-3.8,4.1-6.7,10.5-7.9,16.6c-3.6,1.1-7.2,2.2-10.5,3.2
+                                        C31.7,19.1,39.8,4.6,49.1,4.3z M37.4,59.3c0.4,6.4,17.3,7.8,18.3,22.9c0.7,11.9-6.3,20-16.4,20.6c-12.2,0.8-18.9-6.4-18.9-6.4
+                                        l2.6-11c0,0,6.7,5.1,12.1,4.7c3.5-0.2,4.8-3.1,4.7-5.1c-0.5-8.4-14.3-7.9-15.2-21.7C23.8,51.8,31.4,40.1,48.2,39
+                                        c6.5-0.4,9.8,1.2,9.8,1.2l-3.8,14.4c0,0-4.3-2-9.4-1.6C37.4,53.5,37.3,58.2,37.4,59.3z M61.2,19c0-3-0.4-7.3-1.8-10.9
+                                        c4.6,0.9,6.8,6,7.8,9.1C65.4,17.7,63.4,18.3,61.2,19z"/>
+                                    <path d="M78.1,123.9l31.4-7.8c0,0-13.5-91.3-13.6-91.9c-0.1-0.6-0.6-1-1.1-1c-0.5,0-9.3-0.2-9.3-0.2s-5.4-5.2-7.4-7.2V123.9z"/>
+                                </g>
+                            </svg>
+                            Fejlett felhőalapú adatbáziskezelővel a háttérben - azonnali frissítések és megbízható teljesítmény.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <div class="container text-center">
+            <p class="mb-2">
+                &copy; 2025 - Heinemann - Termékellenőrző rendszer belső felhasználásra | Fejlesztette: Tamás
+            </p>
+            <!-- Updated Footer Title -->
+            <p class="mb-1 text-white-50 fw-bold" style="font-size: 1rem;">
+                 <!-- Using inline SVG instead of image reference -->
+                 <svg width="1em" height="1em" viewBox="0 0 109.5 124.5" style="vertical-align: -0.125em; margin-right: 0.25em; fill: currentColor;">
+                    <g>
+                        <path d="M74.7,14.8c0,0-1.4,0.4-3.7,1.1c-0.4-1.3-1-2.8-1.8-4.4c-2.6-5-6.5-7.7-11.1-7.7c0,0,0,0,0,0c-0.3,0-0.6,0-1,0.1
+                            c-0.1-0.2-0.3-0.3-0.4-0.5c-2-2.2-4.6-3.2-7.7-3.1c-6,0.2-12,4.5-16.8,12.2c-3.4,5.4-6,12.2-6.7,17.5c-6.9,2.1-11.7,3.6-11.8,3.7
+                            c-3.5,1.1-3.6,1.2-4,4.5C9.1,40.7,0,111.2,0,111.2l75.6,13.1V14.6C75.2,14.7,74.9,14.7,74.7,14.8z M57.2,20.2
+                            c-4,1.2-8.4,2.6-12.7,3.9c1.2-4.7,3.6-9.4,6.4-12.5c1.1-1.1,2.6-2.4,4.3-3.2C56.9,12,57.3,16.9,57.2,20.2z M49.1,4.3
+                            c1.4,0,2.6,0.3,3.6,0.9c-1.6,0.8-3.2,2.1-4.7,3.6c-3.8,4.1-6.7,10.5-7.9,16.6c-3.6,1.1-7.2,2.2-10.5,3.2
+                            C31.7,19.1,39.8,4.6,49.1,4.3z M37.4,59.3c0.4,6.4,17.3,7.8,18.3,22.9c0.7,11.9-6.3,20-16.4,20.6c-12.2,0.8-18.9-6.4-18.9-6.4
+                            l2.6-11c0,0,6.7,5.1,12.1,4.7c3.5-0.2,4.8-3.1,4.7-5.1c-0.5-8.4-14.3-7.9-15.2-21.7C23.8,51.8,31.4,40.1,48.2,39
+                            c6.5-0.4,9.8,1.2,9.8,1.2l-3.8,14.4c0,0-4.3-2-9.4-1.6C37.4,53.5,37.3,58.2,37.4,59.3z M61.2,19c0-3-0.4-7.3-1.8-10.9
+                            c4.6,0.9,6.8,6,7.8,9.1C65.4,17.7,63.4,18.3,61.2,19z"/>
+                        <path d="M78.1,123.9l31.4-7.8c0,0-13.5-91.3-13.6-91.9c-0.1-0.6-0.6-1-1.1-1c-0.5,0-9.3-0.2-9.3-0.2s-5.4-5.2-7.4-7.2V123.9z"/>
+                    </g>
+                </svg>
+                 Webáruház gyorslinkek:
+            </p> 
+            <p class="small">
+                <a href="https://x1zan1-ss.myshopify.com/" target="_blank" class="text-white-50 mx-2">Főoldal</a> |
+                <a href="https://x1zan1-ss.myshopify.com/products" target="_blank" class="text-white-50 mx-2">Termékek</a> |
+                <a href="https://x1zan1-ss.myshopify.com/collections" target="_blank" class="text-white-50 mx-2">Kollekciók</a>
+            </p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Supabase kliens -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Esetleg Nouislider JS, ha a szűréshez kelleni fog -->
+    <!-- <script src="https://cdn.jsdelivr.net/npm/nouislider@14.6.3/distribute/nouislider.min.js"></script> -->
+    <!-- Saját JavaScript kód -->
+    <script src="js/main.js"></script>
+    <script>
+        // Landing page event handlers
+        document.addEventListener('DOMContentLoaded', function() {
+            // Link "Termékek böngészése" button to products view
+            document.getElementById('browse-products-btn').addEventListener('click', function() {
+                document.getElementById('nav-products').click();
+            });
+            
+            // Link "Adatok összehasonlítása" button to compare view
+            document.getElementById('browse-compare-btn').addEventListener('click', function() {
+                document.getElementById('nav-compare').click();
+            });
+
+            // Link information cards to their respective pages
+            document.getElementById('search-info-card').addEventListener('click', function(e) {
+                e.preventDefault();
+                document.getElementById('nav-products').click();
+            });
+            
+            document.getElementById('compare-info-card').addEventListener('click', function(e) {
+                e.preventDefault();
+                document.getElementById('nav-compare').click();
+            });
+            
+            // Add hover effect for cards
+            const cards = document.querySelectorAll('.hover-shadow');
+            cards.forEach(card => {
+                card.addEventListener('mouseenter', () => {
+                    card.classList.add('shadow');
+                });
+                card.addEventListener('mouseleave', () => {
+                    card.classList.remove('shadow');
+                });
+            });
+        });
+    </script>
+</body>
+</html> 
