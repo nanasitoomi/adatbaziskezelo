@@ -1253,11 +1253,13 @@ function renderCompareTable(stats, shopifyProducts, bcProducts, shopifyLastUpdat
                     <button id="fullscreen-btn" class="btn btn-sm btn-primary me-2">
                         <i class="bi bi-arrows-fullscreen me-1"></i>Teljes képernyő
                     </button>
+                    <!-- Nézetváltó gombok eltávolítva
                     <div class="view-toggle-buttons d-none d-md-flex">
                         <button class="btn btn-sm active" data-view="split">50-50%</button>
                         <button class="btn btn-sm" data-view="shopify">Shopify fókusz</button>
                         <button class="btn btn-sm" data-view="bc">BC fókusz</button>
                     </div>
+                    -->
                 </div>
                 <div class="col-md-6 d-flex justify-content-end">
                     <div class="form-check form-switch highlight-switch">
@@ -1320,11 +1322,13 @@ function renderCompareTable(stats, shopifyProducts, bcProducts, shopifyLastUpdat
             <div class="fullscreen-header">
                 <h3>Összehasonlító nézet (Teljes képernyő)</h3>
                 <div class="d-flex align-items-center">
+                     <!-- Nézetváltó gombok eltávolítva
                     <div class="view-toggle-buttons me-3">
                         <button class="btn btn-sm active" data-fs-view="split">50-50%</button>
                         <button class="btn btn-sm" data-fs-view="shopify">Shopify fókusz</button>
                         <button class="btn btn-sm" data-fs-view="bc">BC fókusz</button>
                     </div>
+                    -->
                     <div class="form-check form-switch me-3">
                         <input class="form-check-input" type="checkbox" id="fs-highlight-missing-data" role="switch" checked>
                         <label class="form-check-label text-white" for="fs-highlight-missing-data">Hiányzó adatok</label>
