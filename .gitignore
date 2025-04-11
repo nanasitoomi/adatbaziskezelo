@@ -27,3 +27,6 @@ coverage/
 
 # Log files
 *.log
+
+# Supabase CLI temp files
+supabase/.temp/

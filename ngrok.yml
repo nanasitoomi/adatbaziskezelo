@@ -1,7 +1,0 @@
-version: "2"
-authtoken: 2vRg33jD3msWNBewZw3m2LESo8s_2CH2B1cDa74zP7jMTMXt8
-tunnels:
-  heinemann:
-    proto: http
-    addr: 5001
-    domain: heinemann-adatbazis.ngrok.dev
