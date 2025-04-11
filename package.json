@@ -1,17 +1,25 @@
 {
   "name": "adatbaziskezelo",
   "version": "1.0.0",
-  "description": "Shopify és Business Central adatbáziskezelő",
-  "main": "server.js",
+  "description": "Supabase frontend with Vite development server",
+  "main": "index.html",
   "scripts": {
-    "start": "node server.js"
+    "dev": "vite supabase_frontend --port 3000 --open",
+    "build": "vite build supabase_frontend",
+    "preview": "vite preview supabase_frontend"
   },
-  "engines": {
-    "node": ">=16.0.0"
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nanasitoomi/adatbaziskezelo.git"
   },
-  "dependencies": {
-    "express": "^4.18.2",
-    "dotenv": "^16.3.1",
-    "cors": "^2.8.5"
+  "keywords": ["supabase", "frontend", "vite"],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/nanasitoomi/adatbaziskezelo/issues"
+  },
+  "homepage": "https://github.com/nanasitoomi/adatbaziskezelo#readme",
+  "devDependencies": {
+    "vite": "^6.2.6"
   }
-} 
+}

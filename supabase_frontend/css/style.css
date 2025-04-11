@@ -470,58 +470,84 @@ a.text-decoration-none {
     flex: 0 0 auto; /* Prevent items from growing/shrinking */
 }
 
-/* Optional: Add a subtle fade-out effect at the bottom when collapsed */
-/* .list-card .product-details::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 1.5em;
-    background: linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,1) 100%);
-    pointer-events: none;
-    opacity: 1;
-    transition: opacity 0.3s ease-out;
+/* Approval checkbox styling */
+.approval-container {
+    margin-left: 10px;
+    background-color: rgba(40, 167, 69, 0.1);
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(40, 167, 69, 0.2);
 }
 
-.list-card .product-details.details-expanded::after {
-    opacity: 0;
-} */
+.approval-label {
+    color: #28a745 !important;
+    font-weight: 600 !important;
+    font-size: 0.9rem !important;
+    white-space: nowrap;
+}
+
+.product-approve {
+    width: 1.2rem !important;
+    height: 1.2rem !important;
+    cursor: pointer !important;
+    border-color: #28a745 !important;
+}
+
+.product-approve:checked {
+    background-color: #28a745 !important;
+    border-color: #28a745 !important;
+}
+
+/* For better visibility in list view */
+.list-card .approval-container {
+    padding: 4px 10px;
+}
+
+.list-card .approval-label {
+    font-size: 1rem !important;
+}
+
+.list-card .product-approve {
+    width: 1.3rem !important;
+    height: 1.3rem !important;
+}
 
 /* CSS for product feedback and comment system */
 
 .product-feedback {
     font-size: 0.9rem;
-}
-
-.product-feedback .form-floating label {
-    font-size: 0.85rem;
-    padding: 0.5rem;
-}
-
-.product-feedback .form-floating > .form-control {
-    padding: 0.5rem;
-    min-height: 70px;
-    font-size: 0.85rem;
-}
-
-.product-feedback .form-floating > .form-control:focus {
-    border-color: #86b7fe;
-    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
-}
-
-.product-feedback .btn {
-    margin-top: 0.25rem;
-    padding: 0.25rem 0.5rem;
-    font-size: 0.8rem;
-}
-
-/* Override some list view styles for the feedback section */
-.list-view .product-feedback {
-    flex-basis: 100%;
     margin-top: 0.5rem;
     padding-top: 0.5rem;
     border-top: 1px solid rgba(0,0,0,0.1);
+    display: flex;
+    align-items: center;
+}
+
+.product-comment {
+    height: auto;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.85rem;
+}
+
+.product-comment:disabled {
+    background-color: rgba(40, 167, 69, 0.05);
+    border-color: rgba(40, 167, 69, 0.2);
+    color: #28a745;
+    font-style: italic;
+}
+
+.save-feedback {
+    white-space: nowrap;
+    margin-left: 0.5rem;
+}
+
+/* Specifikus override a lista nézethez - ha szükséges */
+.list-view .product-feedback {
+    flex-basis: 100%;
+}
+
+.list-view .product-comment {
+    padding: 0.25rem 0.5rem;
 }
 
 /* Feedback table in summary view */
@@ -565,4 +591,120 @@ a.text-decoration-none {
         width: 100%;
         margin-top: 0.5rem;
     }
+}
+
+/* Fullscreen összehasonlító nézet stílusai */
+.fullscreen-mode {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 9999;
+    background-color: var(--color-background-1);
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: opacity 0.2s ease-in-out;
+}
+
+.fullscreen-header {
+    background-color: #282828;
+    color: white;
+    padding: 10px 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+    height: 60px;
+    position: relative;
+    z-index: 10;
+}
+
+.fullscreen-header h3 {
+    margin: 0;
+    font-size: 1.2rem;
+}
+
+.fullscreen-header .btn-group {
+    display: flex;
+    gap: 10px;
+}
+
+.fullscreen-content {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    width: 100%;
+    position: relative;
+}
+
+.fullscreen-table-container {
+    flex: 1 1 50%;
+    overflow: auto;
+    position: relative;
+    border-right: 1px solid var(--color-border);
+    transition: flex 0.3s ease-in-out, flex-basis 0.3s ease-in-out, flex-grow 0.3s ease-in-out;
+    min-width: 0; /* Fontos, hogy a flex elemek ne nőjenek a tartalmuk miatt */
+    box-sizing: border-box; /* Biztosítja, hogy a padding és border ne növelje a tényleges méretet */
+}
+
+.fullscreen-table-container:last-child {
+    border-right: none;
+}
+
+.fullscreen-table-container .table th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+.fullscreen-table-container .table {
+    margin-bottom: 0;
+}
+
+/* Táblázatok sorszinkronizációjához */
+.highlighted-row {
+    background-color: rgba(0, 123, 255, 0.1) !important;
+}
+
+/* Különbségek kiemelése */
+.fullscreen-mode .difference-highlight {
+    background-color: rgba(255, 193, 7, 0.2) !important;
+}
+
+/* Reszponzív beállítások */
+@media (max-width: 991.98px) {
+    .fullscreen-content {
+        flex-direction: column;
+    }
+    
+    .fullscreen-table-container {
+        border-right: none;
+        border-bottom: 1px solid var(--color-border);
+        height: 50%;
+    }
+    
+    .fullscreen-table-container:last-child {
+        border-bottom: none;
+    }
+}
+
+/* Nézetváltás gombok stílusa */
+.view-toggle-buttons {
+    background-color: rgba(40, 40, 40, 0.05);
+    border-radius: 3px;
+    padding: 3px;
+}
+
+.view-toggle-buttons .btn {
+    padding: 3px 10px;
+    font-size: 0.8rem;
+}
+
+.view-toggle-buttons .btn.active {
+    background-color: #282828;
+    color: white;
 } 
