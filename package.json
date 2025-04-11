@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite supabase_frontend --port 3000 --open",
     "build": "vite build",
-    "start": "serve dist -s -p $PORT"
+    "start": "serve supabase_frontend/dist -s -p $PORT"
   },
   "repository": {
     "type": "git",
