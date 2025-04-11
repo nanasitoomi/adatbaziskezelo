@@ -5,14 +5,18 @@
   "main": "index.html",
   "scripts": {
     "dev": "vite supabase_frontend --port 3000 --open",
-    "build": "vite build supabase_frontend",
-    "preview": "vite preview supabase_frontend"
+    "build": "vite build",
+    "start": "serve dist -s -p $PORT"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/nanasitoomi/adatbaziskezelo.git"
   },
-  "keywords": ["supabase", "frontend", "vite"],
+  "keywords": [
+    "supabase",
+    "frontend",
+    "vite"
+  ],
   "author": "",
   "license": "ISC",
   "bugs": {
@@ -21,5 +25,8 @@
   "homepage": "https://github.com/nanasitoomi/adatbaziskezelo#readme",
   "devDependencies": {
     "vite": "^6.2.6"
+  },
+  "dependencies": {
+    "serve": "^14.2.4"
   }
 }
