@@ -4,7 +4,7 @@
   "description": "Supabase frontend with Vite development server",
   "main": "index.html",
   "scripts": {
-    "dev": "vite supabase_frontend --port 3000 --open",
+    "dev": "vite",
     "build": "vite build",
     "start": "serve supabase_frontend/dist -s -p $PORT"
   },

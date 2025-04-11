@@ -62,16 +62,9 @@ let currentPage = 1;
 let pageSize = 20;
 // Keresés és szűrés
 let searchQuery = "";
-let filters = {
-    type: "all",
-    shopifyCollection: "all",
-    bcCollection: "all",
-    linkStatus: "all"
-};
 // Nézetkezelés
 let currentView = 'products';
 let currentTab = 'all-products';
-let showMissingData = localStorage.getItem('showMissingData') === 'false' ? false : true;  // Hiányzó adatok kiemelésének kapcsolója
 
 // --- Helper Függvények ---
 
@@ -85,7 +78,8 @@ function createFilterOptions(items, selectedValue) {
     ).join('');
 }
 
-function createProductCard(product) {
+// Modosított createProductCard, ami a pre-fetched feedback adatokat használja
+function createProductCard(product, feedbackMap = {}) {
     // Helper function to generate a product card HTML
     const productHandle = safeGet(product, 'Product Handle');
     const title = safeGet(product, 'Title');
@@ -98,14 +92,14 @@ function createProductCard(product) {
     const vintage = safeGet(product, 'Évjárat');
     const taste = safeGet(product, 'Ízjegyek');
 
-    // Get saved feedback if exists
-    const savedFeedback = localStorage.getItem(`product_feedback_${productHandle}`);
-    const feedbackData = savedFeedback ? JSON.parse(savedFeedback) : { approved: false, comment: '' };
-    
+    // Get feedback from the pre-fetched map
+    const feedbackData = feedbackMap[productHandle] || { approved: false, comment: '' };
+
     // Determine comment field attributes based on approval status
     const commentDisabled = feedbackData.approved ? 'disabled' : '';
     const commentPlaceholder = feedbackData.approved ? 'Jóváhagyva - nincs szükség megjegyzésre' : 'Megjegyzés/hiba';
-    const commentValue = feedbackData.approved ? '' : feedbackData.comment;
+    // Use comment from feedbackData, ensure it's not null/undefined
+    const commentValue = feedbackData.approved ? '' : (feedbackData.comment || '');
 
     return `
         <div class="col-md-3 mb-2 product-item">
@@ -344,67 +338,75 @@ function setupFilterHandlers() {
  */
 function applyFilters(products) {
     return products.filter(p => {
-        const searchLower = currentFilters.search.toLowerCase();
-        // Title, Brand, Description match
-        if (currentFilters.search && 
-            !(safeGet(p, 'Title').toLowerCase().includes(searchLower) || 
-              safeGet(p, 'Brand').toLowerCase().includes(searchLower) ||
-              safeGet(p, 'Description', '').toLowerCase().includes(searchLower))) { 
-            return false;
+        // Keresés
+        if (currentFilters.search) {
+            const searchLower = currentFilters.search.toLowerCase();
+            const titleMatch = safeGet(p, 'Title', '').toLowerCase().includes(searchLower);
+            const brandMatch = safeGet(p, 'Brand', '').toLowerCase().includes(searchLower);
+            const descMatch = safeGet(p, 'Description', '').toLowerCase().includes(searchLower);
+            const skuMatch = safeGet(p, 'SKU', '').toLowerCase().includes(searchLower);
+            if (!(titleMatch || brandMatch || descMatch || skuMatch)) return false;
         }
-        // Product Type
+        
+        // Kategória
         if (currentFilters.product_type && safeGet(p, 'Product Type (Custom)') !== currentFilters.product_type) {
             return false;
         }
-        // Brand
+        
+        // Márka
         if (currentFilters.brand && safeGet(p, 'Brand') !== currentFilters.brand) {
             return false;
         }
-        // Origin
+        
+        // Származási hely
         if (currentFilters.origin && safeGet(p, 'Származási hely') !== currentFilters.origin) {
             return false;
         }
-        // Vintage
+        
+        // Évjárat
         if (currentFilters.vintage && safeGet(p, 'Évjárat') !== currentFilters.vintage) {
             return false;
         }
-        // Volume
+        
+        // Kiszerelés
         if (currentFilters.volume && safeGet(p, 'Kiszerelés') !== currentFilters.volume) {
             return false;
         }
-        // Alcohol content
-        const alcohol = parseFloat(safeGet(p, 'Alkoholtartalom', 0));
-        const minAlcohol = parseFloat(currentFilters.min_alcohol);
-        const maxAlcohol = parseFloat(currentFilters.max_alcohol);
-        if (alcohol < minAlcohol || alcohol > maxAlcohol) {
+        
+        // Alkoholtartalom
+        const alcoholContent = parseFloat(String(safeGet(p, 'Alkoholtartalom', '0')).replace(',', '.').replace(/[^\d.]/g, ''));
+        if (currentFilters.min_alcohol && alcoholContent < parseFloat(currentFilters.min_alcohol)) {
             return false;
         }
-        // Taste
+        if (currentFilters.max_alcohol && alcoholContent > parseFloat(currentFilters.max_alcohol)) {
+            return false;
+        }
+        
+        // Ízjegyek
         if (currentFilters.taste && safeGet(p, 'Ízjegyek') !== currentFilters.taste) {
             return false;
         }
-        // Admin Category
-        if (currentFilters.category && safeGet(p, 'Category Name') !== currentFilters.category) {
+        
+        // Admin kategória
+        if (currentFilters.category && safeGet(p, 'admin_category') !== currentFilters.category) {
             return false;
         }
-        // Aging Method - check both original and normalized fields
+        
+        // Érlelési mód - ellenőrizzük mindkét mezőt (kategória és alkategória)
         if (currentFilters.aging_method) {
-            const agingMatch = (
-                safeGet(p, 'Érlelési mód') === currentFilters.aging_method ||
-                safeGet(p, 'aging_method_category') === currentFilters.aging_method ||
-                safeGet(p, 'aging_method_subcategory') === currentFilters.aging_method
-            );
-            if (!agingMatch) return false;
+            const categoryMatch = safeGet(p, 'aging_method_category') === currentFilters.aging_method;
+            const subcategoryMatch = safeGet(p, 'aging_method_subcategory') === currentFilters.aging_method;
+            if (!categoryMatch && !subcategoryMatch) return false;
         }
-        // Grape Variety - check both original and normalized fields
+        
+        // Szőlőfajta kategória - ellenőrizzük a grape_variety_categories mezőt
         if (currentFilters.grape_variety) {
-            const grapeMatch = (
-                safeGet(p, 'Szőlőfatja') === currentFilters.grape_variety ||
-                (p.normalized_grape_varieties && p.normalized_grape_varieties.includes(currentFilters.grape_variety))
-            );
-            if (!grapeMatch) return false;
+            const categoriesStr = safeGet(p, 'grape_variety_categories', '');
+            const categoryMatch = categoriesStr.split(',').map(v => v.trim()).includes(currentFilters.grape_variety);
+            if (!categoryMatch) return false;
         }
-        return true; // Keep product if it passes all filters
+        
+        return true; // Ha minden szűrőn átment
     });
 }
 
@@ -412,17 +414,40 @@ function applyFilters(products) {
  * Renders the provided list of products into the container.
  * @param {Array} productsToRender - The array of products to display.
  */
-function renderProductList(productsToRender) {
+async function renderProductList(productsToRender) {
     const productsContainer = document.getElementById('products-container');
-    if (!productsContainer) return; 
+    if (!productsContainer) return;
 
-    // Render the products
-    if (productsToRender.length > 0) {
-        productsContainer.innerHTML = productsToRender.map(createProductCard).join('');
-    } else {
-        productsContainer.innerHTML = '<div class="col-12"><p class="text-center text-muted mt-5">Nincs a szűrőnek megfelelő termék.</p></div>';
+    let feedbackMap = {};
+    try {
+        // Fetch feedback for all products being rendered in one go
+        const productHandles = productsToRender.map(p => safeGet(p, 'Product Handle')).filter(handle => handle !== 'N/A');
+        if (productHandles.length > 0) {
+            const { data: feedbackData, error } = await _supabase
+                .from('product_feedback')
+                .select('product_handle, approved, comment')
+                .in('product_handle', productHandles);
+
+            if (error) {
+                console.error("Hiba a visszajelzések lekérdezésekor:", error);
+            } else if (feedbackData) {
+                feedbackData.forEach(fb => {
+                    feedbackMap[fb.product_handle] = { approved: fb.approved, comment: fb.comment };
+                });
+            }
+        }
+    } catch (e) {
+        console.error("Hiba történt a visszajelzések feldolgozása közben:", e);
     }
-    
+
+    // Render the products using the fetched feedback map
+    if (productsToRender.length > 0) {
+        // Pass feedbackMap to createProductCard
+        productsContainer.innerHTML = productsToRender.map(product => createProductCard(product, feedbackMap)).join('');
+    } else {
+        productsContainer.innerHTML = '<div class=\"col-12\"><p class=\"text-center text-muted mt-5\">Nincs a szűrőnek megfelelő termék.</p></div>';
+    }
+
     // Apply the currently selected view AFTER the products are in the DOM
     const viewPreference = localStorage.getItem('productViewPreference') || 'grid';
     if (viewPreference === 'list') {
@@ -445,271 +470,408 @@ function renderProductList(productsToRender) {
 function setupFeedbackHandlers() {
     // Handle save button clicks
     document.querySelectorAll('.save-feedback').forEach(button => {
-        button.addEventListener('click', function(e) {
-            const productId = this.getAttribute('data-product-id');
-            saveFeedback(productId);
-        });
+        button.removeEventListener('click', handleSaveFeedbackClick); // Remove potential old listener
+        button.addEventListener('click', handleSaveFeedbackClick);
     });
-    
+
     // Handle checkbox changes
     document.querySelectorAll('.product-approve').forEach(checkbox => {
-        checkbox.addEventListener('change', function(e) {
-            const productId = this.getAttribute('data-product-id');
-            const commentField = document.getElementById(`comment-${productId}`);
-            
-            // If approved, disable the comment field and clear it
-            if (this.checked && commentField) {
-                commentField.disabled = true;
-                commentField.value = '';
-                commentField.placeholder = 'Jóváhagyva - nincs szükség megjegyzésre';
-            } else if (commentField) {
-                // If not approved, enable the comment field
-                commentField.disabled = false;
-                commentField.placeholder = 'Megjegyzés/hiba';
-            }
-            
-            saveFeedback(productId);
-        });
+        checkbox.removeEventListener('change', handleApproveChange); // Remove potential old listener
+        checkbox.addEventListener('change', handleApproveChange);
     });
-    
+
     // Handle comment input changes (autosave when focus is lost)
     document.querySelectorAll('.product-comment').forEach(textarea => {
-        textarea.addEventListener('blur', function(e) {
-            const productId = this.getAttribute('data-product-id');
-            saveFeedback(productId);
-        });
+        textarea.removeEventListener('blur', handleCommentBlur); // Remove potential old listener
+        textarea.addEventListener('blur', handleCommentBlur);
     });
-    
-    // Initial setup: disable comment fields for already approved items
-    document.querySelectorAll('.product-approve').forEach(checkbox => {
-        if (checkbox.checked) {
-            const productId = checkbox.getAttribute('data-product-id');
-            const commentField = document.getElementById(`comment-${productId}`);
-            if (commentField) {
-                commentField.disabled = true;
-                commentField.value = '';
-                commentField.placeholder = 'Jóváhagyva - nincs szükség megjegyzésre';
-            }
-        }
-    });
+
+    // Removed the initial setup part that relied on localStorage.
+    // The state is now set correctly by createProductCard using data fetched in renderProductList.
 }
 
-// Function to save product feedback to localStorage
-function saveFeedback(productId) {
+// Extracted event handler functions to avoid anonymous functions issues with removeEventListener
+async function handleSaveFeedbackClick(e) {
+    const productId = e.currentTarget.getAttribute('data-product-id');
+    await saveFeedback(productId);
+}
+
+async function handleApproveChange(e) {
+    const productId = e.currentTarget.getAttribute('data-product-id');
+    const commentField = document.getElementById(`comment-${productId}`);
+    const checkbox = e.currentTarget; // Use currentTarget which is the checkbox
+
+    // If approved, disable the comment field and clear it
+    if (checkbox.checked && commentField) {
+        commentField.disabled = true;
+        commentField.value = '';
+        commentField.placeholder = 'Jóváhagyva - nincs szükség megjegyzésre';
+    } else if (commentField) {
+        // If not approved, enable the comment field
+        commentField.disabled = false;
+        commentField.placeholder = 'Megjegyzés/hiba';
+    }
+
+    await saveFeedback(productId);
+}
+
+async function handleCommentBlur(e) {
+    const productId = e.currentTarget.getAttribute('data-product-id');
+    await saveFeedback(productId);
+}
+
+// Modosított saveFeedback: async és Supabase upsert használata
+async function saveFeedback(productId) {
     const checkbox = document.getElementById(`approve-${productId}`);
     const textarea = document.getElementById(`comment-${productId}`);
-    
+
     if (!checkbox || !textarea) return;
-    
-    // If checkbox is checked, ensure comment is cleared
+
+    // If checkbox is checked, ensure comment is cleared before saving
     if (checkbox.checked) {
-        textarea.value = '';
-        textarea.disabled = true;
+        textarea.value = ''; // Clear value visually
+        textarea.disabled = true; // Ensure it stays disabled
         textarea.placeholder = 'Jóváhagyva - nincs szükség megjegyzésre';
+    } else {
+         textarea.disabled = false; // Ensure enabled if unchecked
+         textarea.placeholder = 'Megjegyzés/hiba';
     }
-    
+
     const feedbackData = {
+        product_handle: productId, // Az adatbázisban product_handle a mező neve, nem product_id
         approved: checkbox.checked,
-        comment: checkbox.checked ? '' : textarea.value.trim(),
-        timestamp: new Date().toISOString(),
-        productId: productId
+        // Save null to the database if approved, otherwise save trimmed comment
+        comment: checkbox.checked ? null : textarea.value.trim()
+        // created_at automatikusan beállítódik az adatbázisban
     };
-    
-    // Save to localStorage
-    localStorage.setItem(`product_feedback_${productId}`, JSON.stringify(feedbackData));
-    
-    // Visual feedback
+
+    // Save to Supabase using upsert
     const saveButton = document.querySelector(`.save-feedback[data-product-id="${productId}"]`);
     if (saveButton) {
-        saveButton.innerHTML = '<i class="bi bi-check"></i> Mentve';
-        saveButton.classList.remove('btn-primary');
-        saveButton.classList.add('btn-success');
-        
-        // Reset button after 2 seconds
-        setTimeout(() => {
-            saveButton.innerHTML = '<i class="bi bi-save"></i> Mentés';
-            saveButton.classList.remove('btn-success');
-            saveButton.classList.add('btn-primary');
-        }, 2000);
+        saveButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Mentés...';
+        saveButton.disabled = true;
+    }
+
+    try {
+        const { error } = await _supabase
+            .from('product_feedback')
+            .upsert(feedbackData, { onConflict: 'product_handle' }); // A product_handle az elsődleges kulcs
+
+        if (error) {
+            console.error('Supabase hiba a mentés során:', error);
+            if (saveButton) {
+                 saveButton.innerHTML = '<i class="bi bi-x-circle"></i> Hiba';
+                 saveButton.classList.remove('btn-primary', 'btn-success');
+                 saveButton.classList.add('btn-danger');
+            }
+            
+            // Lokális tárolás hiba esetén
+            try {
+                const timestamp = new Date().toISOString();
+                const localFeedbackData = {
+                    productId,
+                    approved: checkbox.checked,
+                    comment: checkbox.checked ? '' : textarea.value.trim(),
+                    timestamp,
+                    localOnly: true
+                };
+                localStorage.setItem(`product_feedback_${productId}`, JSON.stringify(localFeedbackData));
+                
+                if (saveButton) {
+                    saveButton.innerHTML = '<i class="bi bi-save"></i> Lokálisan mentve';
+                    saveButton.classList.remove('btn-danger', 'btn-primary');
+                    saveButton.classList.add('btn-warning');
+                    setTimeout(() => {
+                        saveButton.innerHTML = '<i class="bi bi-save"></i> Mentés';
+                        saveButton.classList.remove('btn-warning');
+                        saveButton.classList.add('btn-primary');
+                        saveButton.disabled = false;
+                    }, 2000);
+                }
+            } catch (localError) {
+                console.error('Lokális mentési hiba:', localError);
+            }
+        } else {
+            // Visual feedback on success
+            if (saveButton) {
+                saveButton.innerHTML = '<i class="bi bi-check-lg"></i> Mentve';
+                saveButton.classList.remove('btn-primary', 'btn-danger');
+                saveButton.classList.add('btn-success');
+
+                // Reset button after 2 seconds
+                setTimeout(() => {
+                    saveButton.innerHTML = '<i class="bi bi-save"></i> Mentés';
+                    saveButton.classList.remove('btn-success');
+                    saveButton.classList.add('btn-primary');
+                    saveButton.disabled = false; // Re-enable button
+                }, 2000);
+            }
+        }
+    } catch (e) {
+         console.error('Hiba a visszajelzés mentésekor:', e);
+         if (saveButton) {
+             saveButton.innerHTML = '<i class="bi bi-x-circle"></i> Hiba';
+             saveButton.classList.remove('btn-primary', 'btn-success');
+             saveButton.classList.add('btn-danger');
+             
+             // Lokális tárolás hiba esetén
+             try {
+                 const timestamp = new Date().toISOString();
+                 const localFeedbackData = {
+                     productId,
+                     approved: checkbox.checked,
+                     comment: checkbox.checked ? '' : textarea.value.trim(),
+                     timestamp,
+                     localOnly: true
+                 };
+                 localStorage.setItem(`product_feedback_${productId}`, JSON.stringify(localFeedbackData));
+                 
+                 setTimeout(() => {
+                     saveButton.innerHTML = '<i class="bi bi-save"></i> Lokálisan mentve';
+                     saveButton.classList.remove('btn-danger', 'btn-primary');
+                     saveButton.classList.add('btn-warning');
+                     
+                     setTimeout(() => {
+                         saveButton.innerHTML = '<i class="bi bi-save"></i> Mentés';
+                         saveButton.classList.remove('btn-warning');
+                         saveButton.classList.add('btn-primary');
+                         saveButton.disabled = false;
+                     }, 2000);
+                 }, 1000);
+             } catch (localError) {
+                 console.error('Lokális mentési hiba:', localError);
+                 setTimeout(() => {
+                      saveButton.innerHTML = '<i class="bi bi-save"></i> Mentés';
+                      saveButton.classList.remove('btn-danger');
+                      saveButton.classList.add('btn-primary');
+                      saveButton.disabled = false;
+                  }, 2000);
+             }
+         }
     }
 }
 
 // --- Filter Event Handlers --- (Update calls inside these)
 
-function handleSearchChange(e) {
+async function handleSearchChange(e) {
     currentFilters.search = e.target.value;
-    const filteredProducts = applyFilters(allProducts);
-    updateFilterOptions(filteredProducts);
-    renderProductList(filteredProducts);
-    renderActiveFilters(); // Aktív szűrők frissítése
+    currentPage = 1; // Reset to first page
+    await updateProductDisplay(); // Call new function to update list and pagination
 }
 
-function handleFilterChange(e) {
+async function handleFilterChange(e) {
     const target = e.target;
     const filterName = target.id.replace('-select', '').replace('-', '_');
     currentFilters[filterName] = target.value;
-    
+
     if (filterName === 'min_alcohol' || filterName === 'max_alcohol') {
         document.querySelectorAll('.alcohol-preset.active').forEach(btn => btn.classList.remove(ACTIVE_CLASS));
     }
-    
-    const filteredProducts = applyFilters(allProducts);
-    updateFilterOptions(filteredProducts);
-    renderProductList(filteredProducts);
-    renderActiveFilters(); // Aktív szűrők frissítése
+
+    currentPage = 1; // Reset to first page
+    await updateProductDisplay(); // Call new function
 }
 
-function handleAlcoholPresetClick(e) {
+async function handleAlcoholPresetClick(e) {
     const min = e.target.getAttribute('data-min');
     const max = e.target.getAttribute('data-max');
-    
+
     document.getElementById('min-alcohol').value = min;
     document.getElementById('max-alcohol').value = max;
-    
+
     currentFilters.min_alcohol = min;
     currentFilters.max_alcohol = max;
-    
+
     document.querySelectorAll('.alcohol-preset').forEach(btn => {
         btn.classList.remove(ACTIVE_CLASS);
     });
     e.target.classList.add(ACTIVE_CLASS);
-    
-    const filteredProducts = applyFilters(allProducts);
-    updateFilterOptions(filteredProducts);
-    renderProductList(filteredProducts);
-    renderActiveFilters(); // Aktív szűrők frissítése
+
+    currentPage = 1; // Reset to first page
+    await updateProductDisplay(); // Call new function
 }
 
-// --- Initial View Rendering --- (Update calls inside this)
+// --- Refactored function to update product list and pagination ---
+async function updateProductDisplay() {
+    // 1. Szűrő opciók frissítése (az *összes* termék alapján)
+    updateFilterOptions(allProducts);
 
-function renderProductsAndFilters() {
-    // Build the complete products view HTML string
+    // 2. Aktív szűrők renderelése
+    renderActiveFilters();
+
+    // 3. Szűrt termékek meghatározása és az aktuális oldal kiválasztása
+    const filteredProducts = applyFilters(allProducts);
+    const totalPages = Math.ceil(filteredProducts.length / pageSize);
+    // Biztosítjuk, hogy a currentPage ne legyen nagyobb, mint a totalPages
+    if (currentPage > totalPages) {
+        currentPage = Math.max(1, totalPages);
+    }
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const productsForCurrentPage = filteredProducts.slice(startIndex, endIndex);
+
+    // Logoljuk a szűrt termékeket és az oldalt
+    console.log(`Frissítés: Összes szűrt: ${filteredProducts.length}, Oldal: ${currentPage}/${totalPages}, Megjelenítve: ${productsForCurrentPage.length}`);
+
+    // 4. Termékek renderelése az aktuális oldalhoz
+    await renderProductList(productsForCurrentPage); // Csak a listát frissítjük
+
+    // 5. Lapozó renderelése
+    renderPagination(totalPages, currentPage); // Csak a lapozót frissítjük
+
+    // Itt már nem kell eseménykezelőket újra hozzáadni, mert a fő struktúra nem változott
+}
+
+// --- Initial View Rendering --- (Only called once per view load)
+
+async function renderProductsAndFilters() {
+    // Build the complete products view HTML string (including filter panel, buttons, containers)
+    // Note: Added a placeholder for pagination below the products container
     appContent.innerHTML = `
         <div class="container-fluid">
-           <!-- ... (HTML structure is correct now) ... -->
-            <!-- Szűrő Panel -->
-            <div class="row mb-4">
-                <div class="col-md-12">
+           <!-- Szűrő Panel HTML -->
+           <div class="row mb-3">
+                <div class="col-12">
                     <div class="card">
-                        <div class="card-header">
-                            <h5 class="mb-0"><i class="bi bi-funnel"></i> Szűrés</h5>
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Termékek szűrése</h5>
+                            <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#filterCollapse" aria-expanded="true" aria-controls="filterCollapse">
+                                <i class="bi bi-chevron-up"></i>
+                            </button>
                         </div>
-                        <div class="card-body">
-                            <div class="row g-3">
-                                <!-- Keresés mező -->
-                                <div class="col-md-12 mb-4">
-                                    <label for="search-input" class="form-label"><i class="bi bi-search"></i> Keresés</label>
-                                    <input type="text" id="search-input" class="form-control form-control-lg" 
-                                           placeholder="Keresés termék neve, márka vagy leírás alapján..." value="${currentFilters.search}">
-                                </div>
-                                
-                                <!-- Alkoholtartalom szűrő -->
-                                <div class="col-md-6">
-                                    <label for="alcohol-range" class="form-label"><i class="bi bi-percent"></i> Alkoholtartalom (%)</label>
-                                    <div class="row">
-                                        <div class="col-md-6">
-                                            <div class="input-group">
-                                                <span class="input-group-text">Min</span>
-                                                <input type="number" class="form-control" id="min-alcohol" 
-                                                      value="${currentFilters.min_alcohol}" min="0" max="100" step="0.1">
-                                                <span class="input-group-text">%</span>
-                                            </div>
+                        <div class="collapse show" id="filterCollapse">
+                            <div class="card-body">
+                                <div class="row">
+                                    <!-- Keresés -->
+                                    <div class="col-md-12 mb-3">
+                                        <div class="input-group">
+                                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                                            <input type="text" class="form-control" id="search-input" placeholder="Keresés terméknév, márka vagy leírás alapján..." value="${currentFilters.search}">
                                         </div>
-                                        <div class="col-md-6">
-                                            <div class="input-group">
-                                                <span class="input-group-text">Max</span>
-                                                <input type="number" class="form-control" id="max-alcohol" 
-                                                      value="${currentFilters.max_alcohol}" min="0" max="100" step="0.1">
-                                                <span class="input-group-text">%</span>
+                                    </div>
+                                    
+                                    <!-- Kategória -->
+                                    <div class="col-md-4 mb-3">
+                                        <label for="product-type-select" class="form-label">Kategória</label>
+                                        <select class="form-select" id="product-type-select">
+                                            <option value="">Minden kategória</option>
+                                            ${createFilterOptions(distinctProductTypes, currentFilters.product_type)}
+                                        </select>
+                                    </div>
+                                    
+                                    <!-- Márka -->
+                                    <div class="col-md-4 mb-3">
+                                        <label for="brand-select" class="form-label">Márka</label>
+                                        <select class="form-select" id="brand-select">
+                                            <option value="">Minden márka</option>
+                                            ${createFilterOptions(distinctBrands, currentFilters.brand)}
+                                        </select>
+                                    </div>
+                                    
+                                    <!-- Származási hely -->
+                                    <div class="col-md-4 mb-3">
+                                        <label for="origin-select" class="form-label">Származási hely</label>
+                                        <select class="form-select" id="origin-select">
+                                            <option value="">Minden származási hely</option>
+                                            ${createFilterOptions(distinctOrigins, currentFilters.origin)}
+                                        </select>
+                                    </div>
+                                    
+                                    <!-- Évjárat -->
+                                    <div class="col-md-4 mb-3">
+                                        <label for="vintage-select" class="form-label">Évjárat</label>
+                                        <select class="form-select" id="vintage-select">
+                                            <option value="">Minden évjárat</option>
+                                            ${createFilterOptions(distinctVintages, currentFilters.vintage)}
+                                        </select>
+                                    </div>
+                                    
+                                    <!-- Kiszerelés -->
+                                    <div class="col-md-4 mb-3">
+                                        <label for="volume-select" class="form-label">Kiszerelés</label>
+                                        <select class="form-select" id="volume-select">
+                                            <option value="">Minden kiszerelés</option>
+                                            ${createFilterOptions(distinctVolumes, currentFilters.volume)}
+                                        </select>
+                                    </div>
+                                    
+                                    <!-- Ízjegyek -->
+                                    <div class="col-md-4 mb-3">
+                                        <label for="taste-select" class="form-label">Ízjegyek</label>
+                                        <select class="form-select" id="taste-select">
+                                            <option value="">Minden ízjegy</option>
+                                            ${createFilterOptions(distinctTastes, currentFilters.taste)}
+                                        </select>
+                                    </div>
+                                    
+                                    <!-- Admin Kategória -->
+                                    <div class="col-md-4 mb-3">
+                                        <label for="category-select" class="form-label">Admin Kategória</label>
+                                        <select class="form-select" id="category-select">
+                                            <option value="">Minden admin kategória</option>
+                                            ${createFilterOptions(distinctAdminCategories, currentFilters.category)}
+                                        </select>
+                                    </div>
+                                    
+                                    <!-- Érlelési mód -->
+                                    <div class="col-md-4 mb-3">
+                                        <label for="aging_method-select" class="form-label">Érlelési mód</label>
+                                        <select class="form-select" id="aging_method-select">
+                                            <option value="">Minden érlelési mód</option>
+                                            ${createFilterOptions(distinctAgingMethods, currentFilters.aging_method)}
+                                        </select>
+                                    </div>
+                                    
+                                    <!-- Szőlőfajta -->
+                                    <div class="col-md-4 mb-3">
+                                        <label for="grape_variety-select" class="form-label">Szőlőfajta</label>
+                                        <select class="form-select" id="grape_variety-select">
+                                            <option value="">Minden szőlőfajta</option>
+                                            ${createFilterOptions(distinctGrapeVarieties, currentFilters.grape_variety)}
+                                        </select>
+                                    </div>
+                                    
+                                    <!-- Alkoholtartalom -->
+                                    <div class="col-md-12 mb-3">
+                                        <label class="form-label">Alkoholtartalom (%)</label>
+                                        <div class="row align-items-center">
+                                            <div class="col-md-2">
+                                                <div class="input-group">
+                                                    <input type="number" class="form-control" id="min-alcohol" min="0" max="100" step="0.1" value="${currentFilters.min_alcohol}">
+                                                    <span class="input-group-text">%</span>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-1 text-center">
+                                                <span>-</span>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <div class="input-group">
+                                                    <input type="number" class="form-control" id="max-alcohol" min="0" max="100" step="0.1" value="${currentFilters.max_alcohol}">
+                                                    <span class="input-group-text">%</span>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-7">
+                                                <div class="btn-group btn-group-sm alcohol-preset-buttons">
+                                                    ${createAlcoholRangeButtons()}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="mt-2">
-                                        <div class="btn-group w-100" role="group">
-                                            ${createAlcoholRangeButtons()} <!-- Initial static buttons -->
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Dropdown Filters (initial structure) -->
-                                <div class="col-md-3">
-                                    <label for="product-type-select" class="form-label"><i class="bi bi-tag"></i> Kategória</label>
-                                    <select id="product-type-select" class="form-select">
-                                        <option value="">Minden kategória</option>
-                                        <!-- Options will be populated dynamically -->
-                                    </select>
-                                </div>
-                                <div class="col-md-3">
-                                    <label for="brand-select" class="form-label"><i class="bi bi-award"></i> Márka</label>
-                                    <select id="brand-select" class="form-select">
-                                        <option value="">Összes márka</option>
-                                        <!-- Options will be populated dynamically -->
-                                    </select>
-                                </div>
-                                <div class="col-md-3">
-                                    <label for="origin-select" class="form-label"><i class="bi bi-globe"></i> Származási hely</label>
-                                    <select id="origin-select" class="form-select">
-                                        <option value="">Összes származási hely</option>
-                                        <!-- Options will be populated dynamically -->
-                                    </select>
-                                </div>
-                                <div class="col-md-3">
-                                    <label for="vintage-select" class="form-label"><i class="bi bi-calendar-event"></i> Évjárat</label>
-                                    <select id="vintage-select" class="form-select">
-                                        <option value="">Minden évjárat</option>
-                                        <!-- Options will be populated dynamically -->
-                                    </select>
-                                </div>
-                                <div class="col-md-3">
-                                    <label for="volume-select" class="form-label"><i class="bi bi-cup"></i> Kiszerelés</label>
-                                    <select id="volume-select" class="form-select">
-                                        <option value="">Minden kiszerelés</option>
-                                        <!-- Options will be populated dynamically -->
-                                    </select>
-                                </div>
-                                <div class="col-md-3">
-                                    <label for="taste-select" class="form-label"><i class="bi bi-cup-hot"></i> Ízjegyek</label>
-                                    <select id="taste-select" class="form-select">
-                                        <option value="">Minden ízjegy</option>
-                                        <!-- Options will be populated dynamically -->
-                                    </select>
-                                </div>
-                                <div class="col-md-3">
-                                    <label for="category-select" class="form-label"><i class="bi bi-gear"></i> Admin kategória</label>
-                                    <select id="category-select" class="form-select">
-                                        <option value="">Összes admin kategória</option>
-                                        <!-- Options will be populated dynamically -->
-                                    </select>
-                                </div>
-                                <div class="col-md-3">
-                                    <label for="aging_method-select" class="form-label"><i class="bi bi-hourglass-split"></i> Érlelési mód</label>
-                                    <select id="aging_method-select" class="form-select">
-                                        <option value="">Összes érlelési mód</option>
-                                        <!-- Options will be populated dynamically -->
-                                    </select>
-                                </div>
-                                <div class="col-md-3">
-                                    <label for="grape_variety-select" class="form-label"><i class="bi bi-flower1"></i> Szőlőfajta</label>
-                                    <select id="grape_variety-select" class="form-select">
-                                        <option value="">Összes szőlőfajta</option>
-                                        <!-- Options will be populated dynamically -->
-                                    </select>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-            
             <!-- Aktív Szűrők Szekció -->
             <div class="row mb-3">
                 <div class="col-12" id="active-filters-container" style="min-height: 40px;">
                     <!-- Ide kerülnek a dinamikusan generált aktív szűrők -->
                 </div>
             </div>
-            
-            <!-- Nézet Váltás -->
-            <div class="row mb-3">
+
+            <!-- Nézet Váltás és Akciók -->
+            <div class="row mb-3 align-items-center">
                 <div class="col-md-6">
                     <button id="show-feedback-summary" class="btn btn-info text-white">
                         <i class="bi bi-clipboard-data"></i> Visszajelzések összesítése
@@ -718,7 +880,18 @@ function renderProductsAndFilters() {
                         <i class="bi bi-download"></i> Exportálás
                     </button>
                 </div>
-                <div class="col-md-6 d-flex justify-content-end">
+                <div class="col-md-6 d-flex justify-content-end align-items-center">
+                    <!-- Oldalméret választó -->
+                    <div class="me-3">
+                         <label for="page-size-select" class="form-label form-label-sm me-1">Oldalméret:</label>
+                         <select id="page-size-select" class="form-select form-select-sm" style="width: auto; display: inline-block;">
+                             <option value="20" ${pageSize === 20 ? 'selected' : ''}>20</option>
+                             <option value="50" ${pageSize === 50 ? 'selected' : ''}>50</option>
+                             <option value="100" ${pageSize === 100 ? 'selected' : ''}>100</option>
+                             <option value="200" ${pageSize === 200 ? 'selected' : ''}>200</option>
+                         </select>
+                    </div>
+                    <!-- Nézet váltó -->
                     <div class="btn-group" role="group" aria-label="Nézet váltás">
                         <button type="button" class="btn btn-outline-secondary" id="grid-view-btn">
                             <i class="bi bi-grid-3x3-gap-fill"></i> Kártyás nézet
@@ -729,34 +902,55 @@ function renderProductsAndFilters() {
                     </div>
                 </div>
             </div>
-            
+
             <!-- Termékek konténer -->
             <div class="row" id="products-container">
                 <!-- Termékek helye - renderProductList függvény tölti fel -->
             </div>
+
+            <!-- Lapozó konténer -->
+            <div class="row mt-4">
+                 <div class="col-12 d-flex justify-content-center" id="pagination-container">
+                     <!-- Lapozó gombok helye - renderPagination tölti fel -->
+                 </div>
+            </div>
         </div>
     `;
-    
+
     // A HTML struktúra beállítása UTÁN futtatjuk a többi DOM manipulációt és eseménykezelő beállítást
-    
-    // 1. Szűrő opciók frissítése (kezdetben az összes termék alapján)
+
+    // 1. Szűrő opciók frissítése (az *összes* termék alapján, hogy a letiltott opciók látszódjanak)
     updateFilterOptions(allProducts);
 
-    // 2. Aktív szűrők renderelése (kezdetben üres)
-    renderActiveFilters(); 
-    
-    // 3. Termékek renderelése (kezdetben az összes)
-    const initialFilteredProducts = applyFilters(allProducts);
-    renderProductList(initialFilteredProducts); 
-    
-    // 4. Eseménykezelők beállítása a szűrőkhöz és nézetváltóhoz
-    setupFilterHandlers();
-    
-    // 5. Feedback summary button event handler
-    document.getElementById('show-feedback-summary').addEventListener('click', showFeedbackSummary);
-    document.getElementById('export-feedback').addEventListener('click', exportFeedback);
-    
-    // 6. Kezdeti nézet beállítása
+    // 2. Aktív szűrők renderelése
+    renderActiveFilters();
+
+    // 3. Szűrt termékek meghatározása és az aktuális oldal kiválasztása
+    const filteredProducts = applyFilters(allProducts);
+    const totalPages = Math.ceil(filteredProducts.length / pageSize);
+    // Biztosítjuk, hogy a currentPage ne legyen nagyobb, mint a totalPages
+    if (currentPage > totalPages) {
+        currentPage = Math.max(1, totalPages); // Visszaugrás az utolsó oldalra, vagy 1-re, ha nincs termék
+    }
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const productsForCurrentPage = filteredProducts.slice(startIndex, endIndex);
+
+    // Logoljuk a szűrt termékeket és az oldalt
+    console.log(`Összes szűrt termék: ${filteredProducts.length}, Oldal: ${currentPage}/${totalPages}, Megjelenítve: ${productsForCurrentPage.length}`);
+    console.log('Aktuális oldal termékei:', productsForCurrentPage.slice(0, 5));
+
+    // 4. Termékek renderelése az aktuális oldalhoz
+    await renderProductList(productsForCurrentPage);
+
+    // 5. Lapozó renderelése
+    renderPagination(totalPages, currentPage);
+
+    // 6. Eseménykezelők beállítása
+    setupFilterHandlers(); // Filter handlers
+    setupActionHandlers(); // Feedback, export, view toggle, page size handlers
+
+    // 7. Kezdeti nézet beállítása
     const viewPreference = localStorage.getItem('productViewPreference') || 'grid';
     const gridBtn = document.getElementById('grid-view-btn');
     const listBtn = document.getElementById('list-view-btn');
@@ -764,14 +958,80 @@ function renderProductsAndFilters() {
         if (viewPreference === 'list') {
             listBtn.classList.add(ACTIVE_CLASS);
             gridBtn.classList.remove(ACTIVE_CLASS);
-            applyListView();
+            // applyListView(); // renderProductList már alkalmazza a nézetet
         } else {
             gridBtn.classList.add(ACTIVE_CLASS);
             listBtn.classList.remove(ACTIVE_CLASS);
-            applyGridView();
+            // applyGridView(); // renderProductList már alkalmazza a nézetet
         }
     }
+
+    // 8. Központi eseménykezelő (filter remove, clear all, pagination)
+    appContent.removeEventListener('click', handleAppContentClick); // Remove old listener first
+    appContent.addEventListener('click', handleAppContentClick);
 }
+
+// Új függvény az akciógombok eseménykezelőinek beállításához
+function setupActionHandlers() {
+    const showFeedbackBtn = document.getElementById('show-feedback-summary');
+    const exportFeedbackBtn = document.getElementById('export-feedback');
+    const pageSizeSelect = document.getElementById('page-size-select');
+    const gridViewButton = document.getElementById('grid-view-btn');
+    const listViewButton = document.getElementById('list-view-btn');
+
+    if (showFeedbackBtn) {
+        showFeedbackBtn.removeEventListener('click', showFeedbackSummary);
+        showFeedbackBtn.addEventListener('click', showFeedbackSummary);
+    }
+    if (exportFeedbackBtn) {
+        exportFeedbackBtn.removeEventListener('click', exportFeedback);
+        exportFeedbackBtn.addEventListener('click', exportFeedback);
+    }
+    if (pageSizeSelect) {
+        pageSizeSelect.removeEventListener('change', handlePageSizeChange);
+        pageSizeSelect.addEventListener('change', handlePageSizeChange);
+    }
+     // Nézetváltó gombok kezelése (korábban setupFilterHandlers-ben volt)
+    if (gridViewButton) {
+        gridViewButton.removeEventListener('click', handleGridViewClick);
+        gridViewButton.addEventListener('click', handleGridViewClick);
+    }
+    if (listViewButton) {
+        listViewButton.removeEventListener('click', handleListViewClick);
+        listViewButton.addEventListener('click', handleListViewClick);
+    }
+}
+
+// Új eseménykezelő az oldalméret változtatásához
+async function handlePageSizeChange(e) {
+    pageSize = parseInt(e.target.value, 10);
+    currentPage = 1; // Vissza az első oldalra
+    await updateProductDisplay(); // Call new function
+}
+
+// Nézetváltó eseménykezelők kiemelve
+function handleGridViewClick(event) {
+    const clickedButton = event.currentTarget;
+    const otherButton = document.getElementById('list-view-btn');
+    if (!clickedButton.classList.contains(ACTIVE_CLASS)) {
+        clickedButton.classList.add(ACTIVE_CLASS);
+        otherButton?.classList.remove(ACTIVE_CLASS);
+        applyGridView();
+        localStorage.setItem('productViewPreference', 'grid');
+    }
+}
+
+function handleListViewClick(event) {
+    const clickedButton = event.currentTarget;
+    const otherButton = document.getElementById('grid-view-btn');
+    if (!clickedButton.classList.contains(ACTIVE_CLASS)) {
+        clickedButton.classList.add(ACTIVE_CLASS);
+        otherButton?.classList.remove(ACTIVE_CLASS);
+        applyListView();
+        localStorage.setItem('productViewPreference', 'list');
+    }
+}
+
 
 function renderActiveFilters() {
     const container = document.getElementById('active-filters-container');
@@ -806,8 +1066,8 @@ function renderActiveFilters() {
             filterHTML += `
                 <span class="badge bg-light text-dark rounded-pill p-2 px-3 m-1 d-inline-flex align-items-center">
                     ${filterLabels[key]}: <strong>${displayValue}</strong>
-                    <button type="button" class="btn-close ms-2" aria-label="Close" 
-                            onclick="removeFilter('${key}')"></button>
+                    <button type="button" class="btn-close ms-2 remove-filter-btn" aria-label="Close" 
+                            data-filter-key="${key}"></button> 
                 </span>
             `;
         }
@@ -818,7 +1078,7 @@ function renderActiveFilters() {
             <div class="col-12">
                 <span class="text-muted me-2"><i class="bi bi-funnel-fill"></i> Aktív szűrők:</span>
                 ${filterHTML}
-                <button class="btn btn-sm btn-outline-danger ms-2" onclick="clearAllFilters()">
+                <button class="btn btn-sm btn-outline-danger ms-2" id="clear-all-filters-btn">
                     <i class="bi bi-x-lg"></i> Összes törlése
                 </button>
             </div>
@@ -826,9 +1086,31 @@ function renderActiveFilters() {
     } else {
         container.innerHTML = ''; // Ha nincs aktív szűrő, ürítsük ki a konténert
     }
+
+    // Eseménykezelők eltávolítva innen
+    // const activeFiltersContainer = document.getElementById('active-filters-container');
+    // if (activeFiltersContainer) {
+    //     activeFiltersContainer.removeEventListener('click', handleRemoveFilterClick);
+    //     activeFiltersContainer.addEventListener('click', handleRemoveFilterClick);
+    // }
+    // const clearAllButton = container.querySelector('.btn-outline-danger');
+    // if (clearAllButton) {
+    //     clearAllButton.removeEventListener('click', clearAllFilters);
+    //     clearAllButton.addEventListener('click', clearAllFilters);
+    // }
 }
 
-function removeFilter(filterKey) {
+// Ezt a függvényt most a központi eseménykezelő váltja fel
+// function handleRemoveFilterClick(event) {
+//     if (event.target.classList.contains('remove-filter-btn')) {
+//         const filterKey = event.target.getAttribute('data-filter-key');
+//         if (filterKey) {
+//             removeFilter(filterKey);
+//         }
+//     }
+// }
+
+async function removeFilter(filterKey) { // Made async
     // Alapértékek a törléshez
     const defaultValues = {
         search: '',
@@ -863,16 +1145,46 @@ function removeFilter(filterKey) {
         document.getElementById('max-alcohol').value = defaultValues.max_alcohol;
     }
 
-    // Újrarendereljük a termékeket és az aktív szűrőket
-    const currentlyFilteredProducts = applyFilters(allProducts); // Get the new filtered set
-    updateFilterOptions(currentlyFilteredProducts); // Update dropdowns based on the new set
-    renderProductList(currentlyFilteredProducts); // Render the new list
-    renderActiveFilters();
+    // Lapozás visszaállítása az 1. oldalra
+    currentPage = 1;
+
+    // Újrarendereljük a teljes nézetet
+    await renderProductsAndFilters(); // Added await
 }
 
-function clearAllFilters() {
-    // Minden szűrőt visszaállítunk az alapértelmezett értékre
-    Object.keys(currentFilters).forEach(key => removeFilter(key));
+async function clearAllFilters() { // Made async
+    // Reset all filters in currentFilters object
+    const defaultValues = {
+        search: '', product_type: '', brand: '', origin: '', vintage: '', volume: '',
+        min_alcohol: '0', max_alcohol: '100', taste: '', category: '', aging_method: '', grape_variety: ''
+    };
+    // Create a new object with default values
+    Object.keys(currentFilters).forEach(key => {
+        currentFilters[key] = defaultValues[key];
+    });
+
+    // Reset UI elements (dropdowns, inputs)
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) searchInput.value = '';
+
+    const minAlcoholInput = document.getElementById('min-alcohol');
+    if (minAlcoholInput) minAlcoholInput.value = '0'; // Külön ellenőrzés és értékadás
+
+    const maxAlcoholInput = document.getElementById('max-alcohol');
+    if (maxAlcoholInput) maxAlcoholInput.value = '100'; // Külön ellenőrzés és értékadás
+
+    document.querySelectorAll('.alcohol-preset.active').forEach(btn => btn.classList.remove(ACTIVE_CLASS));
+    document.querySelectorAll('select.form-select').forEach(select => {
+        if (select.id !== 'page-size-select') { // Don't reset page size select
+           select.value = '';
+        }
+    });
+
+    // Lapozás visszaállítása az 1. oldalra
+    currentPage = 1;
+
+    // Újrarendereljük a teljes nézetet
+    await renderProductsAndFilters(); // Added await
 }
 
 async function loadProductDetail(productId) {
@@ -880,19 +1192,26 @@ async function loadProductDetail(productId) {
     appContent.innerHTML = '<p class="text-center py-5"><i class="bi bi-hourglass-split fs-1 d-block mb-3"></i>Termék betöltése...</p>';
     
     try {
-        // Fetch product details directly from shopify_products
+        // Javított lekérdezés: `normalized_product_view`-ból kérdezi le az adatokat
+        // Győződj meg róla, hogy a Supabase nézet/tábla neve helyes és tartalmazza ezeket az oszlopokat!
         const { data: product, error } = await _supabase
-            .from('shopify_products')
-            .select('*')
+            .from('normalized_product_view') // Updated source view/table
+            .select(`
+                "Product Handle", Title, SKU, Brand, Vendor, 
+                "Product Type (Custom)", "Származási hely", Kiszerelés, 
+                Alkoholtartalom, normalized_grape_varieties, 
+                aging_method_category, dryness_level, Ízjegyek, 
+                Évjárat, Flavor, Description, "Primary Image"
+            `)
             .eq('Product Handle', productId)
             .single();
-            
+
         if (error) throw error;
         if (!product) throw new Error("A termék nem található.");
-        
+
         // Render product detail page
-        renderProductDetail(product);
-        
+        renderProductDetail(product); // A renderProductDetail már kezeli ezeket a mezőneveket
+
     } catch (error) {
         console.error('Hiba a termék betöltése közben:', error);
         appContent.innerHTML = `
@@ -1702,340 +2021,183 @@ function loadHomePage() {
 }
 
 async function loadProductsView() {
-    setActiveNav(navProducts);
-    appContent.innerHTML = '<p class="text-center py-5"><i class="bi bi-hourglass-split fs-1 d-block mb-3"></i>Termékek betöltése...</p>';
     try {
-        // Fetch all products if not already fetched or needs refresh
-        if (allProducts.length === 0) { 
-             // Betöltjük az adatokat a shopify_products táblából az új normalizált mezőkkel együtt
-             const { data: productsData, error: productsError } = await _supabase
-                .from('shopify_products')
-                .select('*');
+        appContent.innerHTML = '<p class="text-center py-5"><i class="bi bi-hourglass-split fs-1 d-block mb-3"></i>Termékek betöltése...</p>';
 
-             if (productsError) throw productsError;
-             allProducts = productsData || [];
+        // Betöltjük az összes terméket a normalized_product_view nézetből
+        const { data, error } = await _supabase
+            .from('normalized_product_view')
+            .select('*');
 
-             // Get distinct values for filters (including new ones)
-             distinctProductTypes = [...new Set(allProducts.map(p => safeGet(p, "Product Type (Custom)")).filter(Boolean))].sort();
-             distinctBrands = [...new Set(allProducts.map(p => safeGet(p, "Brand")).filter(Boolean))].sort();
-             distinctOrigins = [...new Set(allProducts.map(p => safeGet(p, "Származási hely")).filter(Boolean))].sort();
-             distinctVintages = [...new Set(allProducts.map(p => safeGet(p, "Évjárat")).filter(Boolean))].sort();
-             distinctVolumes = [...new Set(allProducts.map(p => safeGet(p, "Kiszerelés")).filter(Boolean))].sort();
-             distinctTastes = [...new Set(allProducts.map(p => safeGet(p, "Ízjegyek")).filter(Boolean))].sort();
-             distinctAdminCategories = [...new Set(allProducts.map(p => safeGet(p, "Category Name")).filter(Boolean))].sort();
-             
-             // Szőlőfajták lekérdezése - mind az eredeti, mind a normalizált mezőből
-             const normalizedGrapeVarieties = [...new Set(allProducts
-                .filter(p => p.normalized_grape_varieties)
-                .flatMap(p => p.normalized_grape_varieties.split(', ')))].sort();
-             
-             distinctGrapeVarieties = [...new Set([
-                 ...normalizedGrapeVarieties,
-                 ...allProducts.map(p => safeGet(p, "Szőlőfatja")).filter(Boolean)
-             ])].sort();
-             
-             // Érlelési módok normalizált kategóriái
-             const normalizedAgingCategories = [...new Set(allProducts
-                .filter(p => p.aging_method_category)
-                .map(p => p.aging_method_category))].sort();
-             
-             const normalizedAgingSubcategories = [...new Set(allProducts
-                .filter(p => p.aging_method_subcategory)
-                .map(p => p.aging_method_subcategory))].sort();
-             
-             distinctAgingMethods = [...new Set([
-                 ...normalizedAgingCategories,
-                 ...normalizedAgingSubcategories,
-                 ...allProducts.map(p => safeGet(p, "Érlelési mód")).filter(Boolean)
-             ])].sort();
-        }
+        if (error) throw error;
 
-        // Render the view
-        renderProductsAndFilters();
+        // Globális változóban tároljuk
+        allProducts = data || [];
+        
+        // Minden egyedi érték kinyerése a szűrőkhöz
+        distinctProductTypes = [...new Set(allProducts.map(p => safeGet(p, 'Product Type (Custom)', '')).filter(Boolean))].sort();
+        distinctBrands = [...new Set(allProducts.map(p => safeGet(p, 'Brand', '')).filter(Boolean))].sort();
+        distinctOrigins = [...new Set(allProducts.map(p => safeGet(p, 'Származási hely', '')).filter(Boolean))].sort();
+        distinctVintages = [...new Set(allProducts.map(p => safeGet(p, 'Évjárat', '')).filter(Boolean))].sort();
+        distinctVolumes = [...new Set(allProducts.map(p => safeGet(p, 'Kiszerelés', '')).filter(Boolean))].sort();
+        distinctTastes = [...new Set(allProducts.map(p => safeGet(p, 'Ízjegyek', '')).filter(Boolean))].sort();
+        distinctAdminCategories = [...new Set(allProducts.map(p => safeGet(p, 'admin_category', '')).filter(Boolean))].sort();
+        
+        // Szőlőfajta kategóriák használata a szőlőfajták helyett
+        distinctGrapeVarieties = [...new Set(allProducts
+            .filter(p => p.grape_variety_categories && p.grape_variety_categories.trim() !== '')
+            .flatMap(p => p.grape_variety_categories.split(', ').map(item => item.trim()))
+            .filter(item => item !== '')
+        )].sort();
+        
+        // Érlelési módok
+        distinctAgingMethods = [...new Set([
+            ...allProducts.filter(p => p.aging_method_category && p.aging_method_category.trim() !== '').map(p => p.aging_method_category.trim()),
+            ...allProducts.filter(p => p.aging_method_subcategory && p.aging_method_subcategory.trim() !== '').map(p => p.aging_method_subcategory.trim())
+        ].filter(item => item !== ''))].sort();
+
+        console.log("🔄 Egyedi értékek:", {
+            Kategóriák: distinctProductTypes.length,
+            Márkák: distinctBrands.length,
+            "Szőlőfajta kategóriák": distinctGrapeVarieties.length,
+            "Érlelési módok": distinctAgingMethods.length
+        });
+
+        // Feedback adatok betöltése (ha vannak)
+        await loadFeedbackData();
+        
+        // Rendereljük a termékeket és a szűrőket
+        await renderProductsAndFilters();
+        
+        // Beállítjuk az aktív navigációs elemet
+        setActiveNav(navProducts);
 
     } catch (error) {
-        console.error('Hiba a termékek betöltése közben:', error);
-        appContent.innerHTML = `
-            <div class="container">
-                <div class="alert alert-danger my-5">
-                    <h4>Hiba történt a termékek betöltése közben</h4>
-                    <p>${error.message}</p>
-                </div>
-            </div>
-        `;
+        console.error('Hiba a termékek betöltésekor:', error);
+        showErrorMessage(`Hiba a termékek betöltésekor: ${error.message}`);
     }
 }
 
 async function loadCompareView() {
     setActiveNav(navCompare);
-    appContent.innerHTML = '<p>Összehasonlító nézet betöltése...</p>';
+    appContent.innerHTML = '<p class="text-center py-5"><i class="bi bi-hourglass-split fs-1 d-block mb-3"></i>Összehasonlító nézet betöltése...</p>';
     try {
-        // 1. Fetch selected Shopify Products columns from normalized view
-        const { data: normalizedProducts, error: normalizedError } = await _supabase
-            .from('normalized_product_view')
-            .select('*')
-            .order('SKU', { ascending: true }); 
+        // Egyszerűsített logika: Mindig a normalized_product_view-t használjuk a Shopify adatokhoz
+        const { data: normalizedProducts, error: normalizedError, count: shopifyCount } = await _supabase
+            .from('normalized_product_view') // Primary source for Shopify-like data
+            .select('*', { count: 'exact' })
+            .order('SKU', { ascending: true });
 
         if (normalizedError) {
-            // Fallback to regular Shopify products if normalized view fails
-            const { data: shopifyProducts, error: shopifyError, count: shopifyCount } = await _supabase
-                .from('shopify_products')
-                .select('*' , { count: 'exact' })
-                .order('SKU', { ascending: true }); 
-
-            if (shopifyError) throw shopifyError;
-            
-            // 2. Fetch selected columns from the new 'bc' table, ordered by 'Szám'
-            const bcSelect = '*'; // Minden mezőt kérünk, hogy kiszámolhassuk az adatteljességet
-            console.log("Fetching BC columns:", bcSelect);
-            const { data: bcProducts, error: bcError, count: bcCount } = await _supabase
-                .from('bc') // Use the new table name 'bc'
-                .select(bcSelect , { count: 'exact' })
-                .order('"Szám"', { ascending: true }); // Order by the new primary key (quoted)
-
-            if (bcError) throw bcError;
-            
-            // 3. Lekérjük a legutolsó módosítási dátumokat mindkét táblából
-            let shopifyLastUpdated = new Date();
-            let bcLastUpdated = new Date();
-            
-            try {
-                // Shopify utolsó módosítás dátuma
-                const { data: shopifyUpdateData } = await _supabase
-                    .from('shopify_products')
-                    .select('updated_at')
-                    .order('updated_at', { ascending: false })
-                    .limit(1);
-                    
-                if (shopifyUpdateData && shopifyUpdateData.length > 0 && shopifyUpdateData[0].updated_at) {
-                    shopifyLastUpdated = new Date(shopifyUpdateData[0].updated_at);
-                }
-                
-                // BC utolsó módosítás dátuma
-                const { data: bcUpdateData } = await _supabase
-                    .from('bc')
-                    .select('updated_at')
-                    .order('updated_at', { ascending: false })
-                    .limit(1);
-                    
-                if (bcUpdateData && bcUpdateData.length > 0 && bcUpdateData[0].updated_at) {
-                    bcLastUpdated = new Date(bcUpdateData[0].updated_at);
-                }
-            } catch (updateError) {
-                console.error('Hiba a frissítési dátumok lekérdezése közben:', updateError);
-                // Ha hiba történt, marad az aktuális dátum
-            }
-            
-            // 4. Számítsuk ki az adatteljességi mutatót mindkét adatkészletre
-            // Shopify adatteljesség számítása
-            let shopifyCompleteness = 0;
-            if (shopifyProducts && shopifyProducts.length > 0) {
-                const relevantFields = [
-                    'Title', 'SKU', 'Brand', 'Product Type (Custom)', 
-                    'Származási hely', 'Kiszerelés', 'Alkoholtartalom', 'Évjárat'
-                ];
-                
-                let filledFields = 0;
-                let totalFields = shopifyProducts.length * relevantFields.length;
-                
-                shopifyProducts.forEach(product => {
-                    relevantFields.forEach(field => {
-                        // Ellenőrizzük, hogy az érték létezik-e és nem üres
-                        // A 0 értékeket érvényesnek tekintjük
-                        const value = product[field];
-                        if (value === 0 || value === '0' || (value !== null && value !== undefined && value !== '')) {
-                            filledFields++;
-                        }
-                    });
-                });
-                
-                shopifyCompleteness = Math.round((filledFields / totalFields) * 100);
-            }
-            
-            // BC adatteljesség számítása
-            let bcCompleteness = 0;
-            if (bcProducts && bcProducts.length > 0) {
-                const relevantFields = [
-                    'Szám', 'Megnevezés', 'Termékkategória', 
-                    'Terület', 'Kiszerelés', 'Évjárat'
-                ];
-                
-                let filledFields = 0;
-                let totalFields = bcProducts.length * relevantFields.length;
-                
-                bcProducts.forEach(product => {
-                    relevantFields.forEach(field => {
-                        // Ellenőrizzük, hogy az érték létezik-e és nem üres
-                        // A 0 értékeket érvényesnek tekintjük
-                        const value = product[field];
-                        if (value === 0 || value === '0' || (value !== null && value !== undefined && value !== '')) {
-                            filledFields++;
-                        }
-                    });
-                });
-                
-                bcCompleteness = Math.round((filledFields / totalFields) * 100);
-            }
-
-            // 5. Prepare stats (using total counts and completeness)
-            const stats = {
-                totalShopify: shopifyCount || 0,
-                totalBC: bcCount || 0,
-                shopifyCompleteness: shopifyCompleteness,
-                bcCompleteness: bcCompleteness
-            };
-
-            // Szűkítsük le a megjelenítendő adatmezőket
-            const displayShopifyProducts = shopifyProducts.map(p => ({
-                'Product Handle': p['Product Handle'],
-                'Title': p['Title'],
-                'SKU': p['SKU'],
-                'Brand': p['Brand'],
-                'Product Type (Custom)': p['Product Type (Custom)'],
-                'Származási hely': p['Származási hely'],
-                'Kiszerelés': p['Kiszerelés'],
-                'Alkoholtartalom': p['Alkoholtartalom'],
-                'Évjárat': p['Évjárat']
-            }));
-
-            const displayBcProducts = bcProducts.map(p => ({
-                'Szám': p['Szám'],
-                'Megnevezés': p['Megnevezés'],
-                'Termékkategória': p['Termékkategória'],
-                'Terület': p['Terület'],
-                'Kiszerelés': p['Kiszerelés'],
-                'Évjárat': p['Évjárat']
-            }));
-
-            // 6. Render the tables with ALL sorted products and last updated dates
-            renderCompareTable(stats, displayShopifyProducts, displayBcProducts, shopifyLastUpdated, bcLastUpdated);
-        } else {
-            // Használjuk a normalizált adatokat
-            // 2. Fetch selected columns from the new 'bc' table, ordered by 'Szám'
-            const { data: bcProducts, error: bcError, count: bcCount } = await _supabase
-                .from('bc')
-                .select('*', { count: 'exact' })
-                .order('"Szám"', { ascending: true });
-
-            if (bcError) throw bcError;
-            
-            // 3. Lekérjük a legutolsó módosítási dátumokat
-            let shopifyLastUpdated = new Date();
-            let bcLastUpdated = new Date();
-            
-            try {
-                // Shopify utolsó módosítás dátuma
-                const { data: shopifyUpdateData } = await _supabase
-                    .from('shopify_products')
-                    .select('updated_at')
-                    .order('updated_at', { ascending: false })
-                    .limit(1);
-                    
-                if (shopifyUpdateData && shopifyUpdateData.length > 0 && shopifyUpdateData[0].updated_at) {
-                    shopifyLastUpdated = new Date(shopifyUpdateData[0].updated_at);
-                }
-                
-                // BC utolsó módosítás dátuma
-                const { data: bcUpdateData } = await _supabase
-                    .from('bc')
-                    .select('updated_at')
-                    .order('updated_at', { ascending: false })
-                    .limit(1);
-                    
-                if (bcUpdateData && bcUpdateData.length > 0 && bcUpdateData[0].updated_at) {
-                    bcLastUpdated = new Date(bcUpdateData[0].updated_at);
-                }
-            } catch (updateError) {
-                console.error('Hiba a frissítési dátumok lekérdezése közben:', updateError);
-            }
-            
-            // 4. Számítsuk ki az adatteljességi mutatót
-            // Shopify adatteljesség számítása a normalizált adatokból
-            let shopifyCompleteness = 0;
-            if (normalizedProducts && normalizedProducts.length > 0) {
-                const relevantFields = [
-                    'Title', 'SKU', 'Brand', 'Product Type (Custom)', 
-                    'Származási hely', 'Kiszerelés', 'Alkoholtartalom', 'Évjárat',
-                    'normalizalt_szolofajtak', 'erlelesi_kategoria'
-                ];
-                
-                let filledFields = 0;
-                let totalFields = normalizedProducts.length * relevantFields.length;
-                
-                normalizedProducts.forEach(product => {
-                    relevantFields.forEach(field => {
-                        const value = product[field];
-                        if (value === 0 || value === '0' || (value !== null && value !== undefined && value !== '')) {
-                            filledFields++;
-                        }
-                    });
-                });
-                
-                shopifyCompleteness = Math.round((filledFields / totalFields) * 100);
-            }
-            
-            // BC adatteljesség számítása
-            let bcCompleteness = 0;
-            if (bcProducts && bcProducts.length > 0) {
-                const relevantFields = [
-                    'Szám', 'Megnevezés', 'Termékkategória', 
-                    'Terület', 'Kiszerelés', 'Évjárat'
-                ];
-                
-                let filledFields = 0;
-                let totalFields = bcProducts.length * relevantFields.length;
-                
-                bcProducts.forEach(product => {
-                    relevantFields.forEach(field => {
-                        const value = product[field];
-                        if (value === 0 || value === '0' || (value !== null && value !== undefined && value !== '')) {
-                            filledFields++;
-                        }
-                    });
-                });
-                
-                bcCompleteness = Math.round((filledFields / totalFields) * 100);
-            }
-            
-            // 5. Prepare stats
-            const stats = {
-                totalShopify: normalizedProducts.length || 0,
-                totalBC: bcCount || 0,
-                shopifyCompleteness: shopifyCompleteness,
-                bcCompleteness: bcCompleteness
-            };
-            
-            // 6. Prepare display data
-            const displayShopifyProducts = normalizedProducts.map(p => ({
-                'Product Handle': p['Product Handle'],
-                'Title': p['Title'],
-                'SKU': p['SKU'],
-                'Brand': p['Brand'],
-                'Product Type (Custom)': p['Product Type (Custom)'],
-                'Származási hely': p['Származási hely'],
-                'Kiszerelés': p['Kiszerelés'],
-                'Alkoholtartalom': p['Alkoholtartalom'],
-                'normalizalt_szolofajtak': p['normalizalt_szolofajtak'],
-                'erlelesi_kategoria': p['erlelesi_kategoria'],
-                'erlelesi_alkategoria': p['erlelesi_alkategoria'],
-                'Évjárat': p['Évjárat']
-            }));
-            
-            const displayBcProducts = bcProducts.map(p => ({
-                'Szám': p['Szám'],
-                'Megnevezés': p['Megnevezés'],
-                'Termékkategória': p['Termékkategória'],
-                'Terület': p['Terület'],
-                'Kiszerelés': p['Kiszerelés'],
-                'Évjárat': p['Évjárat']
-            }));
-            
-            // 7. Render the tables
-            renderCompareTable(stats, displayShopifyProducts, displayBcProducts, shopifyLastUpdated, bcLastUpdated);
+            console.error("Hiba a normalizált adatok lekérésekor:", normalizedError);
+            throw new Error(`Nem sikerült lekérni a normalizált termékadatokat: ${normalizedError.message}`);
         }
+
+        // BC adatok lekérése
+        const { data: bcProducts, error: bcError, count: bcCount } = await _supabase
+            .from('bc')
+            .select('*', { count: 'exact' })
+            .order('"Szám"', { ascending: true });
+
+        if (bcError) {
+            console.error("Hiba a BC adatok lekérésekor:", bcError);
+            throw new Error(`Nem sikerült lekérni a Business Central adatokat: ${bcError.message}`);
+        }
+
+        // Lekérjük a legutolsó módosítási dátumokat
+        let shopifyLastUpdated = new Date(); // Default to now
+        let bcLastUpdated = new Date(); // Default to now
+
+        try {
+            // Shopify utolsó módosítás dátuma (a source táblából, ha van `updated_at`)
+            // HASZNÁLJUK AZ 'all_products' VAGY 'shopify_products' TÁBLÁT ITT, HA VAN UPDATED_AT OSZLOPUK
+            // Vagy ha a normalized_product_view tartalmazza, akkor onnan
+            const { data: shopifyUpdateData } = await _supabase
+                 .from('shopify_products') // Assuming shopify_products has updated_at
+                 .select('updated_at')
+                 .order('updated_at', { ascending: false })
+                 .limit(1)
+                 .maybeSingle(); // Use maybeSingle to avoid error if table is empty
+
+            if (shopifyUpdateData && shopifyUpdateData.updated_at) {
+                 shopifyLastUpdated = new Date(shopifyUpdateData.updated_at);
+            }
+
+            // BC utolsó módosítás dátuma
+            const { data: bcUpdateData } = await _supabase
+                 .from('bc')
+                 .select('updated_at')
+                 .order('updated_at', { ascending: false })
+                 .limit(1)
+                 .maybeSingle();
+
+            if (bcUpdateData && bcUpdateData.updated_at) {
+                 bcLastUpdated = new Date(bcUpdateData.updated_at);
+            }
+        } catch (updateError) {
+            console.warn('Hiba a frissítési dátumok lekérdezése közben (nem kritikus):', updateError);
+            // Ha hiba történt, marad az aktuális dátum (fentebb beállítva)
+        }
+
+        // Adatteljességi mutatók számítása
+        let shopifyCompleteness = 0;
+        if (normalizedProducts && normalizedProducts.length > 0) {
+            const relevantFields = [
+                'Title', 'SKU', 'Brand', 'Product Type (Custom)',
+                'Származási hely', 'Kiszerelés', 'Alkoholtartalom', 'Évjárat',
+                 // Add fields from normalized view if they exist and are relevant for completeness
+                 // e.g., 'normalized_grape_varieties', 'aging_method_category'
+            ];
+            let filledFields = 0;
+            let totalFields = normalizedProducts.length * relevantFields.length;
+            normalizedProducts.forEach(product => {
+                relevantFields.forEach(field => {
+                    const value = product[field];
+                    if (value === 0 || value === '0' || (value !== null && value !== undefined && value !== '' && value !== 'N/A')) {
+                        filledFields++;
+                    }
+                });
+            });
+            shopifyCompleteness = totalFields > 0 ? Math.round((filledFields / totalFields) * 100) : 0;
+        }
+
+        let bcCompleteness = 0;
+        if (bcProducts && bcProducts.length > 0) {
+            const relevantFields = [
+                'Szám', 'Megnevezés', 'Termékkategória',
+                'Terület', 'Kiszerelés', 'Évjárat'
+            ];
+            let filledFields = 0;
+            let totalFields = bcProducts.length * relevantFields.length;
+            bcProducts.forEach(product => {
+                relevantFields.forEach(field => {
+                    const value = product[field];
+                    if (value === 0 || value === '0' || (value !== null && value !== undefined && value !== '' && value !== 'N/A')) {
+                        filledFields++;
+                    }
+                });
+            });
+            bcCompleteness = totalFields > 0 ? Math.round((filledFields / totalFields) * 100) : 0;
+        }
+
+        // Statisztikák előkészítése
+        const stats = {
+            totalShopify: shopifyCount || 0,
+            totalBC: bcCount || 0,
+            shopifyCompleteness: shopifyCompleteness,
+            bcCompleteness: bcCompleteness
+        };
+
+        // Megjelenítendő adatok előkészítése (már a helyes formátumban vannak a lekérdezés után)
+        const displayShopifyProducts = normalizedProducts || [];
+        const displayBcProducts = bcProducts || [];
+
+        // Táblázatok renderelése
+        renderCompareTable(stats, displayShopifyProducts, displayBcProducts, shopifyLastUpdated, bcLastUpdated);
+
     } catch (error) {
         console.error('Hiba az összehasonlító nézet betöltése közben:', error);
-        appContent.innerHTML = `<p class="text-danger">Hiba történt az összehasonlító nézet betöltése közben: ${error.message}</p>`;
+        appContent.innerHTML = `<p class="text-danger text-center">Hiba történt az összehasonlító nézet betöltése közben: ${error.message}</p>`;
     }
 }
 
@@ -2100,94 +2262,64 @@ async function populateDataBadges() {
     const badgeContainer = document.getElementById('data-badge-container');
     if (!badgeContainer) return;
     
-    try {
-        // Shopify táblából próbálunk egy rekordot lekérni, hogy lássuk a mezőneveket
-        const { data: shopifyData, error: shopifyError } = await _supabase
-            .from('shopify_products')
-            .select('*')
-            .limit(1);
-        
-        if (shopifyError || !shopifyData || shopifyData.length === 0) {
-            console.error('Hiba a Shopify adatok lekérdezésekor:', shopifyError);
-            displayFallbackBadges();
-            return;
-        }
-        
-        // Kinyerjük a mezőneveket az első rekordból
-        const firstProduct = shopifyData[0];
-        const shopifyFields = Object.keys(firstProduct).filter(key => 
-            // Kizárjuk az id és timestamp mezőket
-            !['id', 'created_at', 'updated_at'].includes(key)
-        );
-        
-        // Rendezzük prioritás szerint
-        const priorityFields = [
-            'Title', 'Brand', 'SKU', 'Product Type (Custom)', 
-            'Alkoholtartalom', 'Kiszerelés', 'Évjárat', 'Származási hely'
-        ];
-        
-        const sortedFields = [
-            ...priorityFields.filter(f => shopifyFields.includes(f)),
-            ...shopifyFields.filter(f => !priorityFields.includes(f))
-        ];
-        
-        // Legfeljebb 15 mezőt jelenítünk meg
-        const displayFields = sortedFields.slice(0, 15);
-        
-        // Töröljük a korábbi tartalmat
-        badgeContainer.innerHTML = '';
-        
-        // Létrehozzuk a badge-eket
-        displayFields.forEach(field => {
-            const badge = document.createElement('span');
-            badge.classList.add('badge', 'bg-secondary', 'rounded-pill', 'p-2', 'px-3', 'm-1');
-            badge.textContent = field;
-            badgeContainer.appendChild(badge);
-        });
-        
-        // Adjunk hozzá egy "és több" badge-et, ha több mint 15 mező van
-        if (sortedFields.length > 15) {
-            // Létrehozzuk a további mezők tárolóját
-            const additionalFieldsContainer = document.createElement('div');
-            additionalFieldsContainer.id = 'additional-fields';
-            additionalFieldsContainer.classList.add('w-100', 'mt-2', 'd-none');
-            
-            // Hozzáadjuk a további mezőket
-            sortedFields.slice(15).forEach(field => {
-                const item = document.createElement('span');
-                item.classList.add('badge', 'bg-secondary', 'rounded-pill', 'p-2', 'px-3', 'm-1');
-                item.textContent = field;
-                additionalFieldsContainer.appendChild(item);
-            });
-            
-            // Létrehozzuk a mutató gombot
-            const toggleButton = document.createElement('button');
-            toggleButton.classList.add('badge', 'bg-dark', 'rounded-pill', 'p-2', 'px-3', 'm-1', 'border-0');
-            toggleButton.id = 'toggle-fields-btn';
-            toggleButton.innerHTML = `<i class="bi bi-plus-circle me-1"></i> és még ${sortedFields.length - 15} mező`;
-            toggleButton.style.cursor = 'pointer';
-            
-            // Eseménykezelő a gombon
-            toggleButton.addEventListener('click', function() {
-                const additionalFields = document.getElementById('additional-fields');
-                const isHidden = additionalFields.classList.contains('d-none');
-                
-                if (isHidden) {
-                    additionalFields.classList.remove('d-none');
-                    this.innerHTML = `<i class="bi bi-dash-circle me-1"></i> kevesebb mező mutatása`;
-                } else {
-                    additionalFields.classList.add('d-none');
-                    this.innerHTML = `<i class="bi bi-plus-circle me-1"></i> és még ${sortedFields.length - 15} mező`;
-                }
-            });
-            
-            badgeContainer.appendChild(toggleButton);
-            badgeContainer.appendChild(additionalFieldsContainer);
-        }
-    } catch (error) {
-        console.error('Hiba az adatmezők betöltése közben:', error);
-        displayFallbackBadges();
+    // JAVÍTÁS: Ne kérdezzünk le feleslegesen, használjunk explicit listát
+    // Vagy származtathatnánk az allProducts-ból, ha már betöltődött, de ez egyszerűbb.
+    const importantFields = [
+        'Title', 'Brand', 'SKU', 'Product Type (Custom)',
+        'Alkoholtartalom', 'Kiszerelés', 'Évjárat', 'Származási hely',
+        'Ízjegyek', 'normalized_grape_varieties', 'aging_method_category'
+        // ... Adj hozzá más fontos mezőket, ha szükséges ...
+    ];
+
+    badgeContainer.innerHTML = ''; // Clear previous badges
+
+    // Csak az első néhány fontos mezőt mutatjuk alapból
+    const displayFields = importantFields.slice(0, 8);
+
+    displayFields.forEach(field => {
+        const badge = document.createElement('span');
+        badge.classList.add('badge', 'bg-secondary', 'rounded-pill', 'p-2', 'px-3', 'm-1');
+        badge.textContent = field;
+        badgeContainer.appendChild(badge);
+    });
+
+    // Adjunk hozzá egy "és több" badge-et, ha több fontos mező van definiálva
+    if (importantFields.length > displayFields.length) {
+         const toggleButton = document.createElement('button');
+         toggleButton.classList.add('badge', 'bg-dark', 'rounded-pill', 'p-2', 'px-3', 'm-1', 'border-0');
+         toggleButton.id = 'toggle-fields-btn'; // Ez az ID már létezhetett, de most újra létrehozzuk
+         toggleButton.innerHTML = `<i class="bi bi-plus-circle me-1"></i> és még ${importantFields.length - displayFields.length} mező`;
+         toggleButton.style.cursor = 'pointer';
+
+         const additionalFieldsContainer = document.createElement('div');
+         additionalFieldsContainer.id = 'additional-fields'; // Ez az ID már létezhetett
+         additionalFieldsContainer.classList.add('w-100', 'mt-2', 'd-none');
+
+         importantFields.slice(displayFields.length).forEach(field => {
+            const item = document.createElement('span');
+            item.classList.add('badge', 'bg-secondary', 'rounded-pill', 'p-2', 'px-3', 'm-1');
+            item.textContent = field;
+            additionalFieldsContainer.appendChild(item);
+         });
+
+         toggleButton.addEventListener('click', function() {
+            const isHidden = additionalFieldsContainer.classList.contains('d-none');
+            if (isHidden) {
+                additionalFieldsContainer.classList.remove('d-none');
+                this.innerHTML = `<i class="bi bi-dash-circle me-1"></i> kevesebb mező mutatása`;
+            } else {
+                additionalFieldsContainer.classList.add('d-none');
+                this.innerHTML = `<i class="bi bi-plus-circle me-1"></i> és még ${importantFields.length - displayFields.length} mező`;
+            }
+         });
+
+         badgeContainer.appendChild(toggleButton);
+         badgeContainer.appendChild(additionalFieldsContainer);
     }
+    // Hiba esetén a fallback badges megjelenítése már nem szükséges itt,
+    // mivel nem függünk a Supabase lekérdezéstől ebben a függvényben.
+    // Ha a `normalized_product_view` lekérdezése hibára fut a `loadProductsView`-ban,
+    // akkor a badgek nem jelennek meg, ami elfogadható lehet.
 }
 
 /**
@@ -2211,128 +2343,6 @@ function displayFallbackBadges() {
         badgeContainer.appendChild(badge);
     });
 }
-
-function renderShopifyProducts() {
-    const shopifyTableBody = document.getElementById('shopify-products');
-    shopifyTableBody.innerHTML = '';
-
-    if (!shopifyProducts || shopifyProducts.length === 0) {
-        shopifyTableBody.innerHTML = '<tr><td colspan="8" class="text-center">Nincsenek Shopify termékek</td></tr>';
-        return;
-    }
-
-    // Táblázat rendezése
-    const sortedProducts = [...shopifyProducts].sort((a, b) => {
-        const valueA = a[currentSort.shopifyField] || '';
-        const valueB = b[currentSort.shopifyField] || '';
-        return currentSort.direction === 'asc' ? 
-            valueA.toString().localeCompare(valueB.toString()) : 
-            valueB.toString().localeCompare(valueA.toString());
-    });
-
-    sortedProducts.forEach(product => {
-        const row = document.createElement('tr');
-        
-        // Shopify adatmezők
-        const spSKU = product['SKU'] || 'N/A';
-        const spTitle = product['Title'] || 'N/A';
-        const spBrand = product['Brand'] || 'N/A';
-        const spType = product['Product Type (Custom)'] || 'N/A';
-        const spOrigin = product['Származási hely'] || 'N/A';
-        const spVolume = product['Kiszerelés'] || 'N/A';
-        const spAlcohol = product['Alkoholtartalom'] || 'N/A';
-        const spVintage = product['Évjárat'] || 'N/A';
-        
-        // Adatcellák létrehozása
-        addCellToRow(row, spSKU, isMissingData(spSKU));
-        addCellToRow(row, spTitle, isMissingData(spTitle));
-        addCellToRow(row, spBrand, isMissingData(spBrand));
-        addCellToRow(row, spType, isMissingData(spType));
-        addCellToRow(row, spOrigin, isMissingData(spOrigin));
-        
-        // Speciális ellenőrzés a szám-jellegű mezőkre
-        addCellToRow(row, spVolume, 
-            spVolume === 'N/A' || (spVolume !== '0' && spVolume !== 0 && isMissingData(spVolume)));
-        addCellToRow(row, spAlcohol, 
-            spAlcohol === 'N/A' || (spAlcohol !== '0' && spAlcohol !== 0 && isMissingData(spAlcohol)));
-        addCellToRow(row, spVintage,
-            spVintage === 'N/A' || (spVintage !== '0' && spVintage !== 0 && isMissingData(spVintage)));
-            
-        shopifyTableBody.appendChild(row);
-    });
-    
-    // Frissítjük a termékek számát
-    document.getElementById('shopify-count').textContent = sortedProducts.length;
-}
-
-function renderBCProducts() {
-    const bcTableBody = document.getElementById('bc-products');
-    bcTableBody.innerHTML = '';
-
-    if (!bcProducts || bcProducts.length === 0) {
-        bcTableBody.innerHTML = '<tr><td colspan="6" class="text-center">Nincsenek Business Central termékek</td></tr>';
-        return;
-    }
-
-    // Táblázat rendezése
-    const sortedProducts = [...bcProducts].sort((a, b) => {
-        const valueA = a[currentSort.bcField] || '';
-        const valueB = b[currentSort.bcField] || '';
-        return currentSort.direction === 'asc' ? 
-            valueA.toString().localeCompare(valueB.toString()) : 
-            valueB.toString().localeCompare(valueA.toString());
-    });
-
-    sortedProducts.forEach(product => {
-        const row = document.createElement('tr');
-        
-        // BC adatmezők
-        const bcSKU = product['Szám'] || 'N/A';
-        const bcTitle = product['Megnevezés'] || 'N/A';
-        const bcCategory = product['Termékkategória'] || 'N/A';
-        const bcOrigin = product['Terület'] || 'N/A';
-        const bcVolume = product['Kiszerelés'] || 'N/A';
-        const bcVintage = product['Évjárat'] || 'N/A';
-        
-        // Adatcellák létrehozása
-        addCellToRow(row, bcSKU, isMissingData(bcSKU));
-        addCellToRow(row, bcTitle, isMissingData(bcTitle));
-        addCellToRow(row, bcCategory, isMissingData(bcCategory));
-        addCellToRow(row, bcOrigin, isMissingData(bcOrigin));
-        
-        // Speciális ellenőrzés a szám-jellegű mezőkre
-        addCellToRow(row, bcVolume, 
-            bcVolume === 'N/A' || (bcVolume !== '0' && bcVolume !== 0 && isMissingData(bcVolume)));
-        addCellToRow(row, bcVintage, 
-            bcVintage === 'N/A' || (bcVintage !== '0' && bcVintage !== 0 && isMissingData(bcVintage)));
-            
-        bcTableBody.appendChild(row);
-    });
-
-    // Frissítjük a termékek számát
-    document.getElementById('bc-count').textContent = sortedProducts.length;
-}
-
-// Segédfüggvény hiányzó adat ellenőrzésére
-function isMissingData(value) {
-    // Az "N/A" értéket és üres értékeket mindig hiányzónak tekintjük
-    // A 0 értéket NEM tekintjük hiányzónak
-    return value === 'N/A' || value === null || value === undefined || 
-           (value !== 0 && value !== '0' && value.toString().trim() === '');
-}
-
-// Segédfüggvény cella hozzáadására
-function addCellToRow(row, value, isMissing) {
-    const cell = document.createElement('td');
-    cell.textContent = value;
-    
-    // Csak akkor jelöljük a hiányzó adatokat, ha be van kapcsolva a kiemelés
-    if (showMissingData && isMissing) {
-        cell.classList.add('missing-data');
-    }
-    
-    row.appendChild(cell);
-} 
 
 // --- DOM elemek kiválasztása ---
 const shopifyProductsTable = document.getElementById('shopify-products-table');
@@ -2415,16 +2425,33 @@ function updateFilterOptions(filteredProducts) {
         volume: { selectId: 'volume-select', distinctList: distinctVolumes, property: 'Kiszerelés' },
         taste: { selectId: 'taste-select', distinctList: distinctTastes, property: 'Ízjegyek' },
         category: { selectId: 'category-select', distinctList: distinctAdminCategories, property: 'Category Name' },
-        aging_method: { selectId: 'aging_method-select', distinctList: distinctAgingMethods, property: 'Érlelési mód' },
-        grape_variety: { selectId: 'grape_variety-select', distinctList: distinctGrapeVarieties, property: 'Szőlőfatja' }
+        aging_method: { selectId: 'aging_method-select', distinctList: distinctAgingMethods, properties: ['aging_method_category', 'aging_method_subcategory'] }, // Több property ellenőrzése
+        grape_variety: { selectId: 'grape_variety-select', distinctList: distinctGrapeVarieties, property: 'normalized_grape_varieties' } // Csak a normalizált mező
     };
 
     Object.entries(filterConfig).forEach(([key, config]) => {
         const selectElement = document.getElementById(config.selectId);
         if (!selectElement) return;
 
-        // Get available values from the CURRENTLY filtered products
-        const availableValues = new Set(filteredProducts.map(p => safeGet(p, config.property)).filter(Boolean));
+        // Get available values based on the config (single or multiple properties)
+        let availableValues = new Set();
+        if (config.properties) { // Handle multiple properties (e.g., aging_method)
+            config.properties.forEach(prop => {
+                filteredProducts.forEach(p => {
+                    const value = safeGet(p, prop);
+                    if (value) availableValues.add(value);
+                });
+            });
+        } else if (config.property === 'normalized_grape_varieties') { // Handle comma-separated string
+             filteredProducts.forEach(p => {
+                const valueString = safeGet(p, config.property);
+                if (valueString) {
+                    valueString.split(',').forEach(val => availableValues.add(val.trim()));
+                }
+             });
+        } else { // Handle single property
+            availableValues = new Set(filteredProducts.map(p => safeGet(p, config.property)).filter(Boolean));
+        }
 
         // Get the currently selected value for this filter
         const currentSelectedValue = currentFilters[key];
@@ -2466,7 +2493,7 @@ function handleProductLinkClick(e) {
 
 // Function to show all feedback in a summary view
 function showFeedbackSummary() {
-    // Collect all feedback from localStorage
+    // Fetch all feedback from localStorage
     const allFeedback = [];
     const productIdsWithFeedback = new Set();
     
@@ -2654,7 +2681,7 @@ function showFeedbackSummary() {
             e.preventDefault();
             const productId = this.getAttribute('data-product-id');
             if (productId) {
-                loadProductDetail(productId);
+                loadProductDetailPage(productId);
             }
         });
     });
@@ -2750,4 +2777,253 @@ function clearAllFeedback() {
     });
     
     return keysToRemove.length;
+}
+
+// Központi eseménykezelő az appContent-en belüli kattintásokhoz
+async function handleAppContentClick(event) { // Made async
+    let buttonClicked = false;
+
+    // Handle remove filter button clicks
+    const removeFilterButton = event.target.closest('.remove-filter-btn');
+    if (removeFilterButton) {
+        buttonClicked = true;
+        const filterKey = removeFilterButton.getAttribute('data-filter-key');
+        if (filterKey) {
+            await removeFilter(filterKey); // Added await
+        }
+    }
+
+    // Handle clear all filters button click
+    const clearAllButton = event.target.closest('#clear-all-filters-btn');
+    if (clearAllButton) {
+        buttonClicked = true;
+        await clearAllFilters(); // Added await
+    }
+
+    // Handle pagination link clicks
+
+    // ... existing code ...
+
+    // ... existing code ...
+}
+
+// ... existing code ...
+
+// ... existing code ...
+
+// Új függvény a lapozó UI generálásához
+function renderPagination(totalPages, currentPage) {
+    const paginationContainer = document.getElementById('pagination-container');
+    if (!paginationContainer) return;
+
+    paginationContainer.innerHTML = ''; // Clear existing pagination
+
+    if (totalPages <= 1) return; // No pagination needed for 1 or 0 pages
+
+    const ul = document.createElement('ul');
+    ul.classList.add('pagination', 'justify-content-center');
+
+    const maxVisiblePages = 7; // Adjust number of visible page links
+    let startPage, endPage;
+
+    if (totalPages <= maxVisiblePages) {
+        // Show all pages
+        startPage = 1;
+        endPage = totalPages;
+    } else {
+        // Calculate start and end pages with ellipsis
+        const maxPagesBeforeCurrent = Math.floor((maxVisiblePages - 3) / 2);
+        const maxPagesAfterCurrent = Math.ceil((maxVisiblePages - 3) / 2);
+
+        if (currentPage <= maxPagesBeforeCurrent + 1) {
+            startPage = 1;
+            endPage = maxVisiblePages - 2;
+        } else if (currentPage + maxPagesAfterCurrent >= totalPages) {
+            startPage = totalPages - (maxVisiblePages - 3);
+            endPage = totalPages;
+        } else {
+            startPage = currentPage - maxPagesBeforeCurrent;
+            endPage = currentPage + maxPagesAfterCurrent;
+        }
+    }
+
+    // Previous Button
+    const prevLi = document.createElement('li');
+    prevLi.classList.add('page-item');
+    if (currentPage === 1) prevLi.classList.add('disabled');
+    prevLi.innerHTML = `<a class="page-link pagination-link" href="#" data-page="${currentPage - 1}" aria-label="Previous"><span aria-hidden="true">&laquo;</span></a>`;
+    ul.appendChild(prevLi);
+
+    // First Page and Ellipsis (if needed)
+    if (startPage > 1) {
+        const firstLi = document.createElement('li');
+        firstLi.classList.add('page-item');
+        firstLi.innerHTML = `<a class="page-link pagination-link" href="#" data-page="1">1</a>`;
+        ul.appendChild(firstLi);
+        if (startPage > 2) {
+            const ellipsisLi = document.createElement('li');
+            ellipsisLi.classList.add('page-item', 'disabled');
+            ellipsisLi.innerHTML = `<span class="page-link">...</span>`;
+            ul.appendChild(ellipsisLi);
+        }
+    }
+
+    // Page Number Links
+    for (let i = startPage; i <= endPage; i++) {
+        const li = document.createElement('li');
+        li.classList.add('page-item');
+        if (i === currentPage) li.classList.add('active');
+        li.innerHTML = `<a class="page-link pagination-link" href="#" data-page="${i}">${i}</a>`;
+        ul.appendChild(li);
+    }
+
+    // Ellipsis and Last Page (if needed)
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+            const ellipsisLi = document.createElement('li');
+            ellipsisLi.classList.add('page-item', 'disabled');
+            ellipsisLi.innerHTML = `<span class="page-link">...</span>`;
+            ul.appendChild(ellipsisLi);
+        }
+        const lastLi = document.createElement('li');
+        lastLi.classList.add('page-item');
+        lastLi.innerHTML = `<a class="page-link pagination-link" href="#" data-page="${totalPages}">${totalPages}</a>`;
+        ul.appendChild(lastLi);
+    }
+
+    // Next Button
+    const nextLi = document.createElement('li');
+    nextLi.classList.add('page-item');
+    if (currentPage === totalPages) nextLi.classList.add('disabled');
+    nextLi.innerHTML = `<a class="page-link pagination-link" href="#" data-page="${currentPage + 1}" aria-label="Next"><span aria-hidden="true">&raquo;</span></a>`;
+    ul.appendChild(nextLi);
+
+    paginationContainer.appendChild(ul);
+}
+
+// Új függvény a lapozó linkek kattintásának kezelésére
+async function handlePageChange(newPage) {
+    currentPage = newPage;
+    await updateProductDisplay(); // Re-render the list and pagination for the new page
+}
+
+
+async function loadProductDetailPage(productId) {
+    setActiveNav(null); // No specific nav item is active on detail view
+    appContent.innerHTML = '<p class="text-center py-5"><i class="bi bi-hourglass-split fs-1 d-block mb-3"></i>Termék betöltése...</p>';
+    
+    try {
+        // Javított lekérdezés: `normalized_product_view`-ból kérdezi le az adatokat
+        // Győződj meg róla, hogy a Supabase nézet/tábla neve helyes és tartalmazza ezeket az oszlopokat!
+        const { data: product, error } = await _supabase
+            .from('normalized_product_view') // Updated source view/table
+            .select(`
+                "Product Handle", Title, SKU, Brand, Vendor, 
+                "Product Type (Custom)", "Származási hely", Kiszerelés, 
+                Alkoholtartalom, normalized_grape_varieties, 
+                aging_method_category, dryness_level, Ízjegyek, 
+                Évjárat, Flavor, Description, "Primary Image"
+            `)
+            .eq('Product Handle', productId)
+            .single();
+
+        if (error) throw error;
+        if (!product) throw new Error("A termék nem található.");
+
+        // Render product detail page
+        renderProductDetail(product); // A renderProductDetail már kezeli ezeket a mezőneveket
+
+    } catch (error) {
+        console.error('Hiba a termék betöltése közben:', error);
+        appContent.innerHTML = `
+            <div class="container">
+                <div class="alert alert-danger my-5">
+                    <h4>Hiba történt a termék betöltése közben</h4>
+                    <p>${error.message}</p>
+                    <button class="btn btn-outline-primary" onclick="document.getElementById('nav-products').click()">
+                        <i class="bi bi-arrow-left"></i> Vissza a termékekhez
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+}
+
+// Betöltés overlay funkcionalitás
+function showLoadingOverlay(message = 'Betöltés...') {
+    const existingOverlay = document.getElementById('loading-overlay');
+    if (existingOverlay) {
+        const messageElement = existingOverlay.querySelector('.loading-message');
+        if (messageElement) messageElement.textContent = message;
+        existingOverlay.style.display = 'flex';
+        return;
+    }
+
+    const overlay = document.createElement('div');
+    overlay.id = 'loading-overlay';
+    overlay.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); display: flex; justify-content: center; align-items: center; z-index: 9999;';
+    
+    const spinnerContainer = document.createElement('div');
+    spinnerContainer.style.cssText = 'text-align: center;';
+    
+    const spinner = document.createElement('div');
+    spinner.className = 'spinner-border text-primary';
+    spinner.setAttribute('role', 'status');
+    spinner.style.cssText = 'width: 3rem; height: 3rem;';
+    
+    const spinnerText = document.createElement('span');
+    spinnerText.className = 'visually-hidden';
+    spinnerText.textContent = 'Betöltés...';
+    
+    const messageElement = document.createElement('div');
+    messageElement.className = 'loading-message mt-3';
+    messageElement.textContent = message;
+    
+    spinner.appendChild(spinnerText);
+    spinnerContainer.appendChild(spinner);
+    spinnerContainer.appendChild(messageElement);
+    overlay.appendChild(spinnerContainer);
+    
+    document.body.appendChild(overlay);
+}
+
+function hideLoadingOverlay() {
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) {
+        overlay.style.display = 'none';
+    }
+}
+
+function showErrorMessage(message) {
+    appContent.innerHTML = `
+        <div class="container">
+            <div class="alert alert-danger my-5">
+                <h4>Hiba történt</h4>
+                <p>${message}</p>
+            </div>
+        </div>
+    `;
+}
+
+// Feedback adatok betöltése
+async function loadFeedbackData() {
+    try {
+        // A termék visszajelzések lekérdezése a Supabase-ből
+        const { data: feedbackData, error } = await _supabase
+            .from('product_feedback')
+            .select('product_handle, approved, comment');
+
+        if (error) {
+            console.error("Hiba a visszajelzések betöltésekor:", error);
+            return;
+        }
+
+        console.log(`${feedbackData.length} visszajelzés betöltve a Supabase-ből`);
+        
+        // Visszajelzések feldolgozása - nincs szükség helyi tárolásra, csak visszatérünk az adatokkal
+        return feedbackData;
+    } catch (e) {
+        console.error("Hiba a visszajelzések feldolgozása közben:", e);
+        return [];
+    }
 }
