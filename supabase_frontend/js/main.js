@@ -3,8 +3,8 @@ const supabaseUrl = 'https://phbqdjkprftqtshsatce.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBoYnFkamtwcmZ0cXRzaHNhdGNlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQxODQ4NzksImV4cCI6MjA1OTc2MDg3OX0.XaYvCiHvov5ze1LFXOPGlK7VO9bF1o03_B5uLn72P0E';
 
 // Fontos: A production kódban az anon kulcsot és az URL-t biztonságosabb módon kell kezelni (pl. környezeti változók).
-const { createClient } = supabase // Import createClient correctly
-const _supabase = createClient(supabaseUrl, supabaseAnonKey); // Use the imported function
+// Initialize the Supabase client with the loaded library
+const _supabase = supabase.createClient(supabaseUrl, supabaseAnonKey);
 
 // DOM Elemek
 const appContent = document.getElementById('app-content');
@@ -101,6 +101,11 @@ function createProductCard(product) {
     // Get saved feedback if exists
     const savedFeedback = localStorage.getItem(`product_feedback_${productHandle}`);
     const feedbackData = savedFeedback ? JSON.parse(savedFeedback) : { approved: false, comment: '' };
+    
+    // Determine comment field attributes based on approval status
+    const commentDisabled = feedbackData.approved ? 'disabled' : '';
+    const commentPlaceholder = feedbackData.approved ? 'Jóváhagyva - nincs szükség megjegyzésre' : 'Megjegyzés/hiba';
+    const commentValue = feedbackData.approved ? '' : feedbackData.comment;
 
     return `
         <div class="col-md-3 mb-2 product-item">
@@ -114,12 +119,16 @@ function createProductCard(product) {
                             </h6>
                             ${brand !== 'N/A' ? `<p class="card-text text-muted brand-info mb-0"><small>${brand}</small></p>` : ''}
                         </div>
-                        <div class="form-check">
-                            <input class="form-check-input product-approve" type="checkbox" value="" id="approve-${productHandle}" 
-                              data-product-id="${productHandle}" ${feedbackData.approved ? 'checked' : ''}>
-                            <label class="form-check-label" for="approve-${productHandle}">
-                                <span class="visually-hidden">Jóváhagyva</span>
-                            </label>
+                        <div class="approval-container d-flex align-items-center">
+                            <span class="approval-label me-1" style="color: #28a745; font-weight: 600; font-size: 0.9rem;">Jóváhagyva:</span>
+                            <div class="form-check">
+                                <input class="form-check-input product-approve" type="checkbox" value="" id="approve-${productHandle}" 
+                                  data-product-id="${productHandle}" ${feedbackData.approved ? 'checked' : ''}
+                                  style="width: 1.2rem; height: 1.2rem; cursor: pointer;">
+                                <label class="form-check-label" for="approve-${productHandle}">
+                                    <span class="visually-hidden">Jóváhagyva</span>
+                                </label>
+                            </div>
                         </div>
                     </div>
                     <hr class="my-1">
@@ -134,18 +143,15 @@ function createProductCard(product) {
                     </div>
                     
                     <!-- Feedback section -->
-                    <div class="product-feedback mt-2 pt-2 border-top">
-                        <div class="form-floating">
-                            <textarea class="form-control product-comment" placeholder="Megjegyzés/hiba" 
+                    <div class="product-feedback mt-2 pt-2 border-top d-flex align-items-center">
+                        <div class="flex-grow-1 me-2">
+                            <input type="text" class="form-control form-control-sm product-comment" placeholder="${commentPlaceholder}" 
                                 id="comment-${productHandle}" data-product-id="${productHandle}" 
-                                style="height: 80px">${feedbackData.comment}</textarea>
-                            <label for="comment-${productHandle}">Megjegyzés/hiba</label>
+                                value="${commentValue}" ${commentDisabled}>
                         </div>
-                        <div class="d-flex justify-content-end mt-1">
-                            <button class="btn btn-sm btn-primary save-feedback" data-product-id="${productHandle}">
-                                <i class="bi bi-save"></i> Mentés
-                            </button>
-                        </div>
+                        <button class="btn btn-sm btn-primary save-feedback" data-product-id="${productHandle}">
+                            <i class="bi bi-save"></i> Mentés
+                        </button>
                     </div>
                 </div>
             </div>
@@ -155,8 +161,24 @@ function createProductCard(product) {
 
 function applyGridView() {
     const productItems = document.querySelectorAll('.product-item');
+    const productsContainer = document.getElementById('products-container');
+    
+    // Remove list-view class from the container
+    if (productsContainer) {
+        productsContainer.classList.remove(LIST_VIEW_CLASS);
+    }
+    
     productItems.forEach(item => {
-        item.className = 'col-md-3 mb-2 product-item'; // Back to grid layout
+        // Először töröljünk minden oszlop-osztályt
+        item.classList.forEach(className => {
+            if (className.startsWith('col-')) {
+                item.classList.remove(className);
+            }
+        });
+        
+        // Majd adjuk hozzá a grid osztályokat
+        item.classList.add('col-md-3', 'mb-2', 'product-item');
+        
         const card = item.querySelector('.product-card');
         if (card) card.classList.remove('list-card');
         
@@ -176,8 +198,8 @@ function applyGridView() {
         // Reset feedback section styles for grid view
         const feedbackSection = item.querySelector('.product-feedback');
         if (feedbackSection) {
-            feedbackSection.style.width = '';
-            feedbackSection.style.marginLeft = '';
+            // Az inline stílusok eltávolítása már nem szükséges,
+            // mivel a CSS osztályok kezelik az elrendezést
         }
         
         const showMoreBtn = item.querySelector('.show-more-details');
@@ -189,8 +211,24 @@ function applyGridView() {
 
 function applyListView() {
     const productItems = document.querySelectorAll('.product-item');
+    const productsContainer = document.getElementById('products-container');
+    
+    // Add list-view class to the container
+    if (productsContainer) {
+        productsContainer.classList.add(LIST_VIEW_CLASS);
+    }
+    
     productItems.forEach(item => {
-        item.className = 'col-12 mb-2 product-item'; // Full width
+        // Először töröljünk minden oszlop-osztályt
+        item.classList.forEach(className => {
+            if (className.startsWith('col-')) {
+                item.classList.remove(className);
+            }
+        });
+        
+        // Majd adjuk hozzá a lista osztályokat
+        item.classList.add('col-12', 'mb-2', 'product-item');
+        
         const card = item.querySelector('.product-card');
         if (card) card.classList.add('list-card');
         
@@ -210,8 +248,8 @@ function applyListView() {
         // Adjust feedback section for list view
         const feedbackSection = item.querySelector('.product-feedback');
         if (feedbackSection) {
-            // In list view, the feedback section should span the full width
-            feedbackSection.style.width = '100%';
+            // A width: 100% már nem szükséges, mivel a flexbox kezeli az elrendezést
+            // és a CSS-ben már beállítottuk a megfelelő stílusokat
         }
         
         // Remove button logic entirely
@@ -296,7 +334,7 @@ function setupFilterHandlers() {
     });
     
     // Product detail link handlers need to be attached after products are rendered
-    // This is handled inside renderFilteredProducts now.
+    // This is handled inside renderProductList function.
 }
 
 /**
@@ -349,13 +387,22 @@ function applyFilters(products) {
         if (currentFilters.category && safeGet(p, 'Category Name') !== currentFilters.category) {
             return false;
         }
-        // Aging Method
-        if (currentFilters.aging_method && safeGet(p, 'Érlelési mód') !== currentFilters.aging_method) {
-            return false;
+        // Aging Method - check both original and normalized fields
+        if (currentFilters.aging_method) {
+            const agingMatch = (
+                safeGet(p, 'Érlelési mód') === currentFilters.aging_method ||
+                safeGet(p, 'aging_method_category') === currentFilters.aging_method ||
+                safeGet(p, 'aging_method_subcategory') === currentFilters.aging_method
+            );
+            if (!agingMatch) return false;
         }
-        // Grape Variety
-        if (currentFilters.grape_variety && safeGet(p, 'Szőlőfatja') !== currentFilters.grape_variety) {
-            return false;
+        // Grape Variety - check both original and normalized fields
+        if (currentFilters.grape_variety) {
+            const grapeMatch = (
+                safeGet(p, 'Szőlőfatja') === currentFilters.grape_variety ||
+                (p.normalized_grape_varieties && p.normalized_grape_varieties.includes(currentFilters.grape_variety))
+            );
+            if (!grapeMatch) return false;
         }
         return true; // Keep product if it passes all filters
     });
@@ -408,6 +455,19 @@ function setupFeedbackHandlers() {
     document.querySelectorAll('.product-approve').forEach(checkbox => {
         checkbox.addEventListener('change', function(e) {
             const productId = this.getAttribute('data-product-id');
+            const commentField = document.getElementById(`comment-${productId}`);
+            
+            // If approved, disable the comment field and clear it
+            if (this.checked && commentField) {
+                commentField.disabled = true;
+                commentField.value = '';
+                commentField.placeholder = 'Jóváhagyva - nincs szükség megjegyzésre';
+            } else if (commentField) {
+                // If not approved, enable the comment field
+                commentField.disabled = false;
+                commentField.placeholder = 'Megjegyzés/hiba';
+            }
+            
             saveFeedback(productId);
         });
     });
@@ -419,6 +479,19 @@ function setupFeedbackHandlers() {
             saveFeedback(productId);
         });
     });
+    
+    // Initial setup: disable comment fields for already approved items
+    document.querySelectorAll('.product-approve').forEach(checkbox => {
+        if (checkbox.checked) {
+            const productId = checkbox.getAttribute('data-product-id');
+            const commentField = document.getElementById(`comment-${productId}`);
+            if (commentField) {
+                commentField.disabled = true;
+                commentField.value = '';
+                commentField.placeholder = 'Jóváhagyva - nincs szükség megjegyzésre';
+            }
+        }
+    });
 }
 
 // Function to save product feedback to localStorage
@@ -428,9 +501,16 @@ function saveFeedback(productId) {
     
     if (!checkbox || !textarea) return;
     
+    // If checkbox is checked, ensure comment is cleared
+    if (checkbox.checked) {
+        textarea.value = '';
+        textarea.disabled = true;
+        textarea.placeholder = 'Jóváhagyva - nincs szükség megjegyzésre';
+    }
+    
     const feedbackData = {
         approved: checkbox.checked,
-        comment: textarea.value.trim(),
+        comment: checkbox.checked ? '' : textarea.value.trim(),
         timestamp: new Date().toISOString(),
         productId: productId
     };
@@ -652,7 +732,7 @@ function renderProductsAndFilters() {
             
             <!-- Termékek konténer -->
             <div class="row" id="products-container">
-                <!-- Termékek helye - renderFilteredProducts tölti fel -->
+                <!-- Termékek helye - renderProductList függvény tölti fel -->
             </div>
         </div>
     `;
@@ -784,7 +864,9 @@ function removeFilter(filterKey) {
     }
 
     // Újrarendereljük a termékeket és az aktív szűrőket
-    renderFilteredProducts();
+    const currentlyFilteredProducts = applyFilters(allProducts); // Get the new filtered set
+    updateFilterOptions(currentlyFilteredProducts); // Update dropdowns based on the new set
+    renderProductList(currentlyFilteredProducts); // Render the new list
     renderActiveFilters();
 }
 
@@ -798,7 +880,7 @@ async function loadProductDetail(productId) {
     appContent.innerHTML = '<p class="text-center py-5"><i class="bi bi-hourglass-split fs-1 d-block mb-3"></i>Termék betöltése...</p>';
     
     try {
-        // Fetch product details
+        // Fetch product details directly from shopify_products
         const { data: product, error } = await _supabase
             .from('shopify_products')
             .select('*')
@@ -828,6 +910,31 @@ async function loadProductDetail(productId) {
 }
 
 function renderProductDetail(product) {
+    // Alkohol kategória meghatározása
+    let alcoholCategory = 'N/A';
+    let alcoholCategoryClass = '';
+    if (product.Alkoholtartalom && product.Alkoholtartalom !== 'N/A') {
+        const alcoholValue = parseFloat(product.Alkoholtartalom);
+        if (!isNaN(alcoholValue)) {
+            if (alcoholValue >= 0 && alcoholValue <= 5) {
+                alcoholCategory = 'Alacsony';
+                alcoholCategoryClass = 'text-success';
+            } else if (alcoholValue > 5 && alcoholValue <= 10) {
+                alcoholCategory = 'Mérsékelt';
+                alcoholCategoryClass = 'text-info';
+            } else if (alcoholValue > 10 && alcoholValue <= 20) {
+                alcoholCategory = 'Közepes';
+                alcoholCategoryClass = 'text-warning';
+            } else if (alcoholValue > 20 && alcoholValue <= 40) {
+                alcoholCategory = 'Magas';
+                alcoholCategoryClass = 'text-dark fw-bold';
+            } else if (alcoholValue > 40) {
+                alcoholCategory = 'Nagyon magas';
+                alcoholCategoryClass = 'text-danger';
+            }
+        }
+    }
+    
     // Build product detail view based on product_detail.html
     appContent.innerHTML = `
         <div class="container">
@@ -866,6 +973,30 @@ function renderProductDetail(product) {
                         .product-table td {
                             background-color: #ffffff;
                         }
+                        .grape-tag, .aging-tag, .dryness-tag {
+                            display: inline-block;
+                            padding: 0.25rem 0.5rem;
+                            margin: 0.1rem;
+                            border-radius: 0.25rem;
+                            background-color: #f8f9fa;
+                            border: 1px solid #dee2e6;
+                            font-size: 0.875rem;
+                        }
+                        .grape-tag {
+                            background-color: #e9f7ef;
+                            border-color: #c5e1d0;
+                            color: #1e7e34;
+                        }
+                        .aging-tag {
+                            background-color: #e8f4f8;
+                            border-color: #c6dbe7;
+                            color: #0c5460;
+                        }
+                        .dryness-tag {
+                            background-color: #f8f0e8;
+                            border-color: #e7d2c6;
+                            color: #856404;
+                        }
                     </style>
                     <table class="table table-striped product-table">
                         <tbody>
@@ -876,9 +1007,30 @@ function renderProductDetail(product) {
                             ${product["Származási hely"] ? `<tr><th>Származási hely</th><td>${product["Származási hely"]}</td></tr>` : ''}
                             ${product.Kiszerelés ? `<tr><th>Kiszerelés</th><td>${product.Kiszerelés}</td></tr>` : ''}
                             ${product.Alkoholtartalom ? `<tr><th>Alkoholtartalom</th><td>${product.Alkoholtartalom}%</td></tr>` : ''}
+                            ${alcoholCategory !== 'N/A' ? `<tr><th>Alkohol kategória</th><td class="${alcoholCategoryClass}">${alcoholCategory}</td></tr>` : ''}
+                            
+                            ${product.Szőlőfatja || product.normalized_grape_varieties ? 
+                              `<tr>
+                                <th>Szőlőfajták</th>
+                                <td>${product.normalized_grape_varieties || product.Szőlőfatja}</td>
+                              </tr>` : ''
+                            }
+                            
+                            ${product["Érlelési mód"] || product.aging_method_category ? 
+                              `<tr>
+                                <th>Érlelési mód</th>
+                                <td>${product.aging_method_category || product["Érlelési mód"]}</td>
+                              </tr>` : ''
+                            }
+
+                            ${product.dryness_level ? 
+                              `<tr>
+                                <th>Szárazsági fok</th>
+                                <td><span class="dryness-tag">${product.dryness_level}</span></td>
+                              </tr>` : ''
+                            }
+                            
                             ${product.Ízjegyek ? `<tr><th>Ízjegyek</th><td>${product.Ízjegyek}</td></tr>` : ''}
-                            ${product["Érlelési mód"] ? `<tr><th>Érlelési mód</th><td>${product["Érlelési mód"]}</td></tr>` : ''}
-                            ${product["Szőlőfatja"] ? `<tr><th>Szőlőfajta</th><td>${product["Szőlőfatja"]}</td></tr>` : ''}
                             ${product.Évjárat ? `<tr><th>Évjárat</th><td>${product.Évjárat}</td></tr>` : ''}
                             ${product.Flavor ? `<tr><th>Íz</th><td>${product.Flavor}</td></tr>` : ''}
                         </tbody>
@@ -945,7 +1097,7 @@ function renderCompareTable(stats, shopifyProducts, bcProducts, shopifyLastUpdat
             <th style="min-width: 80px;">Évjárat</th>
         </tr>
     `;
-
+    
     // Shopify termékek sorai hiányos adatok kiemelésének lehetőségével
     const shopifyRows = shopifyProducts.map(sp => {
         // Debug: console.log a Shopify objektumra
@@ -962,6 +1114,8 @@ function renderCompareTable(stats, shopifyProducts, bcProducts, shopifyLastUpdat
         const spAlcohol = safeGet(sp, 'Alkoholtartalom');
         const spVintage = safeGet(sp, 'Évjárat');
 
+        // Alkohol kategória kód eltávolítása, ez a rész már nem szükséges
+        
         const titleLink = productHandle !== 'N/A' ? 
             `<a href="#" class="product-detail-link" data-product-id="${productHandle}">${spTitle}</a>` : 
             spTitle;
@@ -1093,9 +1247,19 @@ function renderCompareTable(stats, shopifyProducts, bcProducts, shopifyLastUpdat
         </div>
 
         <div class="container-fluid"> <!-- Added new container-fluid for all content below stats -->
-            <!-- Hiányos adatok kiemelésének kapcsolója -->
+            <!-- Hiányos adatok kiemelésének kapcsolója és Fullscreen gomb -->
             <div class="row mb-3">
-                <div class="col-12 d-flex justify-content-end">
+                <div class="col-md-6 d-flex">
+                    <button id="fullscreen-btn" class="btn btn-sm btn-primary me-2">
+                        <i class="bi bi-arrows-fullscreen me-1"></i>Teljes képernyő
+                    </button>
+                    <div class="view-toggle-buttons d-none d-md-flex">
+                        <button class="btn btn-sm active" data-view="split">50-50%</button>
+                        <button class="btn btn-sm" data-view="shopify">Shopify fókusz</button>
+                        <button class="btn btn-sm" data-view="bc">BC fókusz</button>
+                    </div>
+                </div>
+                <div class="col-md-6 d-flex justify-content-end">
                     <div class="form-check form-switch highlight-switch">
                         <input class="form-check-input" type="checkbox" id="highlight-missing-data" role="switch" checked>
                         <label class="form-check-label" for="highlight-missing-data">Hiányzó adatok kiemelése</label>
@@ -1127,7 +1291,7 @@ function renderCompareTable(stats, shopifyProducts, bcProducts, shopifyLastUpdat
                              <span class="text-muted"><small>Frissítve: ${shopifyFormattedDate}</small></span>
                         </div>
                         <div class="table-responsive">
-                            <table class="table table-striped table-sm mb-0">
+                            <table class="table table-striped table-sm mb-0" id="shopify-table">
                                 <thead>${shopifyTableHeader}</thead>
                                 <tbody>${shopifyRows.length > 0 ? shopifyRows : '<tr><td colspan="8">Nincsenek termékek.</td></tr>'}</tbody>
                             </table>
@@ -1141,12 +1305,47 @@ function renderCompareTable(stats, shopifyProducts, bcProducts, shopifyLastUpdat
                             <span class="text-muted"><small>Frissítve: ${bcFormattedDate}</small></span>
                         </div>
                          <div class="table-responsive">
-                            <table class="table table-striped table-sm mb-0">
+                            <table class="table table-striped table-sm mb-0" id="bc-table">
                                 <thead>${bcTableHeader}</thead>
                                 <tbody>${bcRows.length > 0 ? bcRows : `<tr><td colspan="6">Nincsenek BC termékek.</td></tr>`}</tbody>
                              </table>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fullscreen nézet -->
+        <div id="fullscreen-container" class="fullscreen-mode d-none">
+            <div class="fullscreen-header">
+                <h3>Összehasonlító nézet (Teljes képernyő)</h3>
+                <div class="d-flex align-items-center">
+                    <div class="view-toggle-buttons me-3">
+                        <button class="btn btn-sm active" data-fs-view="split">50-50%</button>
+                        <button class="btn btn-sm" data-fs-view="shopify">Shopify fókusz</button>
+                        <button class="btn btn-sm" data-fs-view="bc">BC fókusz</button>
+                    </div>
+                    <div class="form-check form-switch me-3">
+                        <input class="form-check-input" type="checkbox" id="fs-highlight-missing-data" role="switch" checked>
+                        <label class="form-check-label text-white" for="fs-highlight-missing-data">Hiányzó adatok</label>
+                    </div>
+                    <button id="exit-fullscreen-btn" class="btn btn-outline-light btn-sm">
+                        <i class="bi bi-fullscreen-exit me-1"></i>Kilépés
+                    </button>
+                </div>
+            </div>
+            <div class="fullscreen-content">
+                <div class="fullscreen-table-container" id="fs-shopify-container">
+                    <table class="table table-striped table-sm" id="fs-shopify-table">
+                        <thead>${shopifyTableHeader}</thead>
+                        <tbody>${shopifyRows.length > 0 ? shopifyRows : '<tr><td colspan="8">Nincsenek termékek.</td></tr>'}</tbody>
+                    </table>
+                </div>
+                <div class="fullscreen-table-container" id="fs-bc-container">
+                    <table class="table table-striped table-sm" id="fs-bc-table">
+                        <thead>${bcTableHeader}</thead>
+                        <tbody>${bcRows.length > 0 ? bcRows : `<tr><td colspan="6">Nincsenek BC termékek.</td></tr>`}</tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -1181,6 +1380,280 @@ function renderCompareTable(stats, shopifyProducts, bcProducts, shopifyLastUpdat
                 tablesContainer.classList.remove('missing-data-highlight');
             }
         });
+    }
+
+    // Fullscreen mód eseménykezelői
+    const fullscreenBtn = document.getElementById('fullscreen-btn');
+    const exitFullscreenBtn = document.getElementById('exit-fullscreen-btn');
+    const fullscreenContainer = document.getElementById('fullscreen-container');
+    const fsHighlightCheckbox = document.getElementById('fs-highlight-missing-data');
+
+    if (fullscreenBtn && exitFullscreenBtn && fullscreenContainer) {
+        // Teljes képernyő indítása
+        fullscreenBtn.addEventListener('click', function() {
+            // Először eltávolítjuk a d-none osztályt
+            fullscreenContainer.classList.remove('d-none');
+            document.body.style.overflow = 'hidden';
+            
+            // Szinkronizáljuk a hiányzó adatok kiemelése állapotot
+            if (highlightMissingDataCheckbox && fsHighlightCheckbox) {
+                fsHighlightCheckbox.checked = highlightMissingDataCheckbox.checked;
+                if (fsHighlightCheckbox.checked) {
+                    fullscreenContainer.classList.add('missing-data-highlight');
+                }
+            }
+
+            // Táblázatok szinkronizált görgetésének beállítása
+            syncScrolling();
+            
+            // Explicit frissítés kényszerítése a konténeren
+            fullscreenContainer.style.display = 'none';
+            fullscreenContainer.offsetHeight; // Trigger reflow
+            fullscreenContainer.style.display = '';
+            
+            // Kényszerített kezdeti újrarendereléssel állítjuk be a táblázatok méretét
+            setTimeout(() => {
+                // Explicit beállítjuk mindkét konténer méretét alaphelyzetbe
+                const shopifyContainer = document.getElementById('fs-shopify-container');
+                const bcContainer = document.getElementById('fs-bc-container');
+                if (shopifyContainer && bcContainer) {
+                    shopifyContainer.style.flex = '1 1 50%';
+                    bcContainer.style.flex = '1 1 50%';
+                }
+                
+                // Aktiváljuk a "split" gombot
+                document.querySelectorAll('.view-toggle-buttons button[data-fs-view]').forEach(btn => {
+                    btn.classList.remove('active');
+                    if (btn.getAttribute('data-fs-view') === 'split') {
+                        btn.classList.add('active');
+                    }
+                });
+                
+                // Ha támogatott, valódi fullscreent is kérünk
+                if (document.documentElement.requestFullscreen) {
+                    document.documentElement.requestFullscreen().catch(err => {
+                        console.log("Fullscreen kérés nem sikerült: ", err);
+                    });
+                }
+            }, 100);
+        });
+        
+        // Kilépés teljes képernyőből
+        exitFullscreenBtn.addEventListener('click', function() {
+            // Először kilépünk a fullscreenből, ha aktív
+            if (document.fullscreenElement && document.exitFullscreen) {
+                document.exitFullscreen().catch(err => {
+                    console.log("Fullscreen kilépés nem sikerült: ", err);
+                });
+            }
+            
+            // Azonnali vizuális visszajelzés
+            fullscreenContainer.style.opacity = '0.5';
+            
+            // Kis késleltetéssel kapcsoljuk ki teljesen
+            setTimeout(() => {
+                fullscreenContainer.classList.add('d-none');
+                document.body.style.overflow = '';
+                fullscreenContainer.style.opacity = '1';
+            }, 100);
+        });
+        
+        // Fullscreen hiányzó adatok kapcsoló
+        if (fsHighlightCheckbox) {
+            fsHighlightCheckbox.addEventListener('change', function() {
+                if (this.checked) {
+                    fullscreenContainer.classList.add('missing-data-highlight');
+                } else {
+                    fullscreenContainer.classList.remove('missing-data-highlight');
+                }
+            });
+        }
+        
+        // Normál nézet nézetváltók
+        document.querySelectorAll('.view-toggle-buttons button[data-view]').forEach(btn => {
+            btn.addEventListener('click', function() {
+                // Minden gombot inaktívvá teszünk
+                document.querySelectorAll('.view-toggle-buttons button[data-view]').forEach(b => {
+                    b.classList.remove('active');
+                });
+                
+                // A kiválasztott gombot aktívvá tesszük
+                this.classList.add('active');
+                
+                // Beállítjuk a nézetet a data-view attribútum alapján
+                const view = this.getAttribute('data-view');
+                const tablesContainer = document.getElementById('tables-container');
+                
+                if (tablesContainer) {
+                    const shopifyCol = tablesContainer.querySelector('.col-lg-6:first-child');
+                    const bcCol = tablesContainer.querySelector('.col-lg-6:last-child');
+                    
+                    if (shopifyCol && bcCol) {
+                        // Eltávolítjuk az összes col-lg-* osztályt mindkét elemről
+                        shopifyCol.classList.forEach(className => {
+                            if (className.startsWith('col-lg-')) {
+                                shopifyCol.classList.remove(className);
+                            }
+                        });
+                        
+                        bcCol.classList.forEach(className => {
+                            if (className.startsWith('col-lg-')) {
+                                bcCol.classList.remove(className);
+                            }
+                        });
+                        
+                        // Beállítjuk a kiválasztott nézetet
+                        if (view === 'split') {
+                            shopifyCol.classList.add('col-lg-6');
+                            bcCol.classList.add('col-lg-6');
+                        } else if (view === 'shopify') {
+                            shopifyCol.classList.add('col-lg-8');
+                            bcCol.classList.add('col-lg-4');
+                        } else if (view === 'bc') {
+                            shopifyCol.classList.add('col-lg-4');
+                            bcCol.classList.add('col-lg-8');
+                        }
+                        
+                        // Győződjünk meg, hogy a mb-4 ott van
+                        if (!shopifyCol.classList.contains('mb-4')) {
+                            shopifyCol.classList.add('mb-4');
+                        }
+                        
+                        if (!bcCol.classList.contains('mb-4')) {
+                            bcCol.classList.add('mb-4');
+                        }
+                        
+                        console.log('Normál nézet frissítve:', view);
+                    }
+                }
+            });
+        });
+        
+        // Fullscreen nézet nézetváltók
+        document.querySelectorAll('.view-toggle-buttons button[data-fs-view]').forEach(btn => {
+            btn.addEventListener('click', function() {
+                // Minden gombot inaktívvá teszünk
+                document.querySelectorAll('.view-toggle-buttons button[data-fs-view]').forEach(b => {
+                    b.classList.remove('active');
+                });
+                
+                // A kiválasztott gombot aktívvá tesszük
+                this.classList.add('active');
+                
+                // Beállítjuk a nézetet a data-fs-view attribútum alapján
+                const view = this.getAttribute('data-fs-view');
+                const shopifyContainer = document.getElementById('fs-shopify-container');
+                const bcContainer = document.getElementById('fs-bc-container');
+                const fullscreenContent = document.querySelector('.fullscreen-content');
+                
+                if (shopifyContainer && bcContainer && fullscreenContent) {
+                    // Forcing layout recalculation by accessing offsetHeight
+                    fullscreenContent.offsetHeight;
+                    
+                    // Teljesen eltávolítjuk a korábbi flex beállításokat
+                    shopifyContainer.style.removeProperty('flex');
+                    bcContainer.style.removeProperty('flex');
+                    
+                    // Kis késleltetéssel állítjuk be az új értékeket
+                    setTimeout(() => {
+                        if (view === 'split') {
+                            shopifyContainer.style.flex = '1 1 50%';
+                            bcContainer.style.flex = '1 1 50%';
+                        } else if (view === 'shopify') {
+                            shopifyContainer.style.flex = '3 1 75%';
+                            bcContainer.style.flex = '1 1 25%';
+                        } else if (view === 'bc') {
+                            shopifyContainer.style.flex = '1 1 25%';
+                            bcContainer.style.flex = '3 1 75%';
+                        }
+                        
+                        // Explicit értékekkel is beállítjuk a flex shorthand mellett
+                        // ez segít bizonyos böngészőkben, ahol problémás a flex shorthand
+                        if (view === 'split') {
+                            shopifyContainer.style.flexGrow = '1';
+                            shopifyContainer.style.flexBasis = '50%';
+                            bcContainer.style.flexGrow = '1';
+                            bcContainer.style.flexBasis = '50%';
+                        } else if (view === 'shopify') {
+                            shopifyContainer.style.flexGrow = '3';
+                            shopifyContainer.style.flexBasis = '75%';
+                            bcContainer.style.flexGrow = '1';
+                            bcContainer.style.flexBasis = '25%';
+                        } else if (view === 'bc') {
+                            shopifyContainer.style.flexGrow = '1';
+                            shopifyContainer.style.flexBasis = '25%';
+                            bcContainer.style.flexGrow = '3';
+                            bcContainer.style.flexBasis = '75%';
+                        }
+                        
+                        console.log('Fullscreen nézet frissítve:', view);
+                    }, 50);
+                }
+            });
+        });
+        
+        // Táblázatok szinkronizált görgetésének beállítása
+        function syncScrolling() {
+            const shopifyContainer = document.getElementById('fs-shopify-container');
+            const bcContainer = document.getElementById('fs-bc-container');
+            const shopifyTable = document.getElementById('fs-shopify-table');
+            const bcTable = document.getElementById('fs-bc-table');
+            
+            if (shopifyContainer && bcContainer && shopifyTable && bcTable) {
+                // Shopify táblázat görgetése esetén szinkronizáljuk a BC táblázatot
+                shopifyContainer.addEventListener('scroll', function() {
+                    // Vízszintes görgetés szinkronizálása
+                    bcContainer.scrollLeft = shopifyContainer.scrollLeft;
+                    
+                    // Függőleges görgetés szinkronizálása
+                    bcContainer.scrollTop = shopifyContainer.scrollTop;
+                    
+                    // Sor kiemelése
+                    highlightRows(shopifyContainer.scrollTop);
+                });
+                
+                // BC táblázat görgetése esetén szinkronizáljuk a Shopify táblázatot
+                bcContainer.addEventListener('scroll', function() {
+                    // Vízszintes görgetés szinkronizálása
+                    shopifyContainer.scrollLeft = bcContainer.scrollLeft;
+                    
+                    // Függőleges görgetés szinkronizálása
+                    shopifyContainer.scrollTop = bcContainer.scrollTop;
+                    
+                    // Sor kiemelése
+                    highlightRows(bcContainer.scrollTop);
+                });
+                
+                // Sorok kiemelésének funkciója
+                function highlightRows(scrollTop) {
+                    // Meghatározzuk a látható sorokat
+                    const shopifyRows = shopifyTable.querySelectorAll('tbody tr');
+                    const bcRows = bcTable.querySelectorAll('tbody tr');
+                    
+                    // Törölünk minden korábbi kiemelést
+                    shopifyRows.forEach(row => row.classList.remove('highlighted-row'));
+                    bcRows.forEach(row => row.classList.remove('highlighted-row'));
+                    
+                    // Ha nincsenek sorok, kilépünk
+                    if (!shopifyRows.length || !bcRows.length) return;
+                    
+                    // Meghatározzuk a középső sort a látható területen
+                    const rowHeight = shopifyRows[0].offsetHeight;
+                    const containerHeight = shopifyContainer.clientHeight;
+                    const visibleRowsCount = Math.floor(containerHeight / rowHeight);
+                    const middleVisibleRowIndex = Math.floor(scrollTop / rowHeight) + Math.floor(visibleRowsCount / 2);
+                    
+                    // Kiemeljük a középső sort mindkét táblázatban, ha létezik
+                    if (shopifyRows[middleVisibleRowIndex]) {
+                        shopifyRows[middleVisibleRowIndex].classList.add('highlighted-row');
+                    }
+                    
+                    if (bcRows[middleVisibleRowIndex]) {
+                        bcRows[middleVisibleRowIndex].classList.add('highlighted-row');
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1230,6 +1703,7 @@ async function loadProductsView() {
     try {
         // Fetch all products if not already fetched or needs refresh
         if (allProducts.length === 0) { 
+             // Betöltjük az adatokat a shopify_products táblából az új normalizált mezőkkel együtt
              const { data: productsData, error: productsError } = await _supabase
                 .from('shopify_products')
                 .select('*');
@@ -1245,8 +1719,31 @@ async function loadProductsView() {
              distinctVolumes = [...new Set(allProducts.map(p => safeGet(p, "Kiszerelés")).filter(Boolean))].sort();
              distinctTastes = [...new Set(allProducts.map(p => safeGet(p, "Ízjegyek")).filter(Boolean))].sort();
              distinctAdminCategories = [...new Set(allProducts.map(p => safeGet(p, "Category Name")).filter(Boolean))].sort();
-             distinctAgingMethods = [...new Set(allProducts.map(p => safeGet(p, "Érlelési mód")).filter(Boolean))].sort();
-             distinctGrapeVarieties = [...new Set(allProducts.map(p => safeGet(p, "Szőlőfatja")).filter(Boolean))].sort();
+             
+             // Szőlőfajták lekérdezése - mind az eredeti, mind a normalizált mezőből
+             const normalizedGrapeVarieties = [...new Set(allProducts
+                .filter(p => p.normalized_grape_varieties)
+                .flatMap(p => p.normalized_grape_varieties.split(', ')))].sort();
+             
+             distinctGrapeVarieties = [...new Set([
+                 ...normalizedGrapeVarieties,
+                 ...allProducts.map(p => safeGet(p, "Szőlőfatja")).filter(Boolean)
+             ])].sort();
+             
+             // Érlelési módok normalizált kategóriái
+             const normalizedAgingCategories = [...new Set(allProducts
+                .filter(p => p.aging_method_category)
+                .map(p => p.aging_method_category))].sort();
+             
+             const normalizedAgingSubcategories = [...new Set(allProducts
+                .filter(p => p.aging_method_subcategory)
+                .map(p => p.aging_method_subcategory))].sort();
+             
+             distinctAgingMethods = [...new Set([
+                 ...normalizedAgingCategories,
+                 ...normalizedAgingSubcategories,
+                 ...allProducts.map(p => safeGet(p, "Érlelési mód")).filter(Boolean)
+             ])].sort();
         }
 
         // Render the view
@@ -1269,140 +1766,269 @@ async function loadCompareView() {
     setActiveNav(navCompare);
     appContent.innerHTML = '<p>Összehasonlító nézet betöltése...</p>';
     try {
-        // 1. Fetch selected Shopify Products columns, ordered by SKU
-        const shopifySelect = '*'; // Minden mezőt kérünk, hogy kiszámolhassuk az adatteljességet
-        const { data: shopifyProducts, error: shopifyError, count: shopifyCount } = await _supabase
-            .from('shopify_products')
-            .select(shopifySelect , { count: 'exact' })
+        // 1. Fetch selected Shopify Products columns from normalized view
+        const { data: normalizedProducts, error: normalizedError } = await _supabase
+            .from('normalized_product_view')
+            .select('*')
             .order('SKU', { ascending: true }); 
 
-        if (shopifyError) throw shopifyError;
-
-        // 2. Fetch selected columns from the new 'bc' table, ordered by 'Szám'
-        const bcSelect = '*'; // Minden mezőt kérünk, hogy kiszámolhassuk az adatteljességet
-        console.log("Fetching BC columns:", bcSelect);
-        const { data: bcProducts, error: bcError, count: bcCount } = await _supabase
-            .from('bc') // Use the new table name 'bc'
-            .select(bcSelect , { count: 'exact' })
-            .order('"Szám"', { ascending: true }); // Order by the new primary key (quoted)
-
-        if (bcError) throw bcError;
-        
-        // 3. Lekérjük a legutolsó módosítási dátumokat mindkét táblából
-        let shopifyLastUpdated = new Date();
-        let bcLastUpdated = new Date();
-        
-        try {
-            // Shopify utolsó módosítás dátuma
-            const { data: shopifyUpdateData } = await _supabase
+        if (normalizedError) {
+            // Fallback to regular Shopify products if normalized view fails
+            const { data: shopifyProducts, error: shopifyError, count: shopifyCount } = await _supabase
                 .from('shopify_products')
-                .select('updated_at')
-                .order('updated_at', { ascending: false })
-                .limit(1);
+                .select('*' , { count: 'exact' })
+                .order('SKU', { ascending: true }); 
+
+            if (shopifyError) throw shopifyError;
+            
+            // 2. Fetch selected columns from the new 'bc' table, ordered by 'Szám'
+            const bcSelect = '*'; // Minden mezőt kérünk, hogy kiszámolhassuk az adatteljességet
+            console.log("Fetching BC columns:", bcSelect);
+            const { data: bcProducts, error: bcError, count: bcCount } = await _supabase
+                .from('bc') // Use the new table name 'bc'
+                .select(bcSelect , { count: 'exact' })
+                .order('"Szám"', { ascending: true }); // Order by the new primary key (quoted)
+
+            if (bcError) throw bcError;
+            
+            // 3. Lekérjük a legutolsó módosítási dátumokat mindkét táblából
+            let shopifyLastUpdated = new Date();
+            let bcLastUpdated = new Date();
+            
+            try {
+                // Shopify utolsó módosítás dátuma
+                const { data: shopifyUpdateData } = await _supabase
+                    .from('shopify_products')
+                    .select('updated_at')
+                    .order('updated_at', { ascending: false })
+                    .limit(1);
+                    
+                if (shopifyUpdateData && shopifyUpdateData.length > 0 && shopifyUpdateData[0].updated_at) {
+                    shopifyLastUpdated = new Date(shopifyUpdateData[0].updated_at);
+                }
                 
-            if (shopifyUpdateData && shopifyUpdateData.length > 0 && shopifyUpdateData[0].updated_at) {
-                shopifyLastUpdated = new Date(shopifyUpdateData[0].updated_at);
+                // BC utolsó módosítás dátuma
+                const { data: bcUpdateData } = await _supabase
+                    .from('bc')
+                    .select('updated_at')
+                    .order('updated_at', { ascending: false })
+                    .limit(1);
+                    
+                if (bcUpdateData && bcUpdateData.length > 0 && bcUpdateData[0].updated_at) {
+                    bcLastUpdated = new Date(bcUpdateData[0].updated_at);
+                }
+            } catch (updateError) {
+                console.error('Hiba a frissítési dátumok lekérdezése közben:', updateError);
+                // Ha hiba történt, marad az aktuális dátum
             }
             
-            // BC utolsó módosítás dátuma
-            const { data: bcUpdateData } = await _supabase
+            // 4. Számítsuk ki az adatteljességi mutatót mindkét adatkészletre
+            // Shopify adatteljesség számítása
+            let shopifyCompleteness = 0;
+            if (shopifyProducts && shopifyProducts.length > 0) {
+                const relevantFields = [
+                    'Title', 'SKU', 'Brand', 'Product Type (Custom)', 
+                    'Származási hely', 'Kiszerelés', 'Alkoholtartalom', 'Évjárat'
+                ];
+                
+                let filledFields = 0;
+                let totalFields = shopifyProducts.length * relevantFields.length;
+                
+                shopifyProducts.forEach(product => {
+                    relevantFields.forEach(field => {
+                        // Ellenőrizzük, hogy az érték létezik-e és nem üres
+                        // A 0 értékeket érvényesnek tekintjük
+                        const value = product[field];
+                        if (value === 0 || value === '0' || (value !== null && value !== undefined && value !== '')) {
+                            filledFields++;
+                        }
+                    });
+                });
+                
+                shopifyCompleteness = Math.round((filledFields / totalFields) * 100);
+            }
+            
+            // BC adatteljesség számítása
+            let bcCompleteness = 0;
+            if (bcProducts && bcProducts.length > 0) {
+                const relevantFields = [
+                    'Szám', 'Megnevezés', 'Termékkategória', 
+                    'Terület', 'Kiszerelés', 'Évjárat'
+                ];
+                
+                let filledFields = 0;
+                let totalFields = bcProducts.length * relevantFields.length;
+                
+                bcProducts.forEach(product => {
+                    relevantFields.forEach(field => {
+                        // Ellenőrizzük, hogy az érték létezik-e és nem üres
+                        // A 0 értékeket érvényesnek tekintjük
+                        const value = product[field];
+                        if (value === 0 || value === '0' || (value !== null && value !== undefined && value !== '')) {
+                            filledFields++;
+                        }
+                    });
+                });
+                
+                bcCompleteness = Math.round((filledFields / totalFields) * 100);
+            }
+
+            // 5. Prepare stats (using total counts and completeness)
+            const stats = {
+                totalShopify: shopifyCount || 0,
+                totalBC: bcCount || 0,
+                shopifyCompleteness: shopifyCompleteness,
+                bcCompleteness: bcCompleteness
+            };
+
+            // Szűkítsük le a megjelenítendő adatmezőket
+            const displayShopifyProducts = shopifyProducts.map(p => ({
+                'Product Handle': p['Product Handle'],
+                'Title': p['Title'],
+                'SKU': p['SKU'],
+                'Brand': p['Brand'],
+                'Product Type (Custom)': p['Product Type (Custom)'],
+                'Származási hely': p['Származási hely'],
+                'Kiszerelés': p['Kiszerelés'],
+                'Alkoholtartalom': p['Alkoholtartalom'],
+                'Évjárat': p['Évjárat']
+            }));
+
+            const displayBcProducts = bcProducts.map(p => ({
+                'Szám': p['Szám'],
+                'Megnevezés': p['Megnevezés'],
+                'Termékkategória': p['Termékkategória'],
+                'Terület': p['Terület'],
+                'Kiszerelés': p['Kiszerelés'],
+                'Évjárat': p['Évjárat']
+            }));
+
+            // 6. Render the tables with ALL sorted products and last updated dates
+            renderCompareTable(stats, displayShopifyProducts, displayBcProducts, shopifyLastUpdated, bcLastUpdated);
+        } else {
+            // Használjuk a normalizált adatokat
+            // 2. Fetch selected columns from the new 'bc' table, ordered by 'Szám'
+            const { data: bcProducts, error: bcError, count: bcCount } = await _supabase
                 .from('bc')
-                .select('updated_at')
-                .order('updated_at', { ascending: false })
-                .limit(1);
+                .select('*', { count: 'exact' })
+                .order('"Szám"', { ascending: true });
+
+            if (bcError) throw bcError;
+            
+            // 3. Lekérjük a legutolsó módosítási dátumokat
+            let shopifyLastUpdated = new Date();
+            let bcLastUpdated = new Date();
+            
+            try {
+                // Shopify utolsó módosítás dátuma
+                const { data: shopifyUpdateData } = await _supabase
+                    .from('shopify_products')
+                    .select('updated_at')
+                    .order('updated_at', { ascending: false })
+                    .limit(1);
+                    
+                if (shopifyUpdateData && shopifyUpdateData.length > 0 && shopifyUpdateData[0].updated_at) {
+                    shopifyLastUpdated = new Date(shopifyUpdateData[0].updated_at);
+                }
                 
-            if (bcUpdateData && bcUpdateData.length > 0 && bcUpdateData[0].updated_at) {
-                bcLastUpdated = new Date(bcUpdateData[0].updated_at);
+                // BC utolsó módosítás dátuma
+                const { data: bcUpdateData } = await _supabase
+                    .from('bc')
+                    .select('updated_at')
+                    .order('updated_at', { ascending: false })
+                    .limit(1);
+                    
+                if (bcUpdateData && bcUpdateData.length > 0 && bcUpdateData[0].updated_at) {
+                    bcLastUpdated = new Date(bcUpdateData[0].updated_at);
+                }
+            } catch (updateError) {
+                console.error('Hiba a frissítési dátumok lekérdezése közben:', updateError);
             }
-        } catch (updateError) {
-            console.error('Hiba a frissítési dátumok lekérdezése közben:', updateError);
-            // Ha hiba történt, marad az aktuális dátum
-        }
-        
-        // 4. Számítsuk ki az adatteljességi mutatót mindkét adatkészletre
-        // Shopify adatteljesség számítása
-        let shopifyCompleteness = 0;
-        if (shopifyProducts && shopifyProducts.length > 0) {
-            const relevantFields = [
-                'Title', 'SKU', 'Brand', 'Product Type (Custom)', 
-                'Származási hely', 'Kiszerelés', 'Alkoholtartalom', 'Évjárat'
-            ];
             
-            let filledFields = 0;
-            let totalFields = shopifyProducts.length * relevantFields.length;
-            
-            shopifyProducts.forEach(product => {
-                relevantFields.forEach(field => {
-                    // Ellenőrizzük, hogy az érték létezik-e és nem üres
-                    // A 0 értékeket érvényesnek tekintjük
-                    const value = product[field];
-                    if (value === 0 || value === '0' || (value !== null && value !== undefined && value !== '')) {
-                        filledFields++;
-                    }
+            // 4. Számítsuk ki az adatteljességi mutatót
+            // Shopify adatteljesség számítása a normalizált adatokból
+            let shopifyCompleteness = 0;
+            if (normalizedProducts && normalizedProducts.length > 0) {
+                const relevantFields = [
+                    'Title', 'SKU', 'Brand', 'Product Type (Custom)', 
+                    'Származási hely', 'Kiszerelés', 'Alkoholtartalom', 'Évjárat',
+                    'normalizalt_szolofajtak', 'erlelesi_kategoria'
+                ];
+                
+                let filledFields = 0;
+                let totalFields = normalizedProducts.length * relevantFields.length;
+                
+                normalizedProducts.forEach(product => {
+                    relevantFields.forEach(field => {
+                        const value = product[field];
+                        if (value === 0 || value === '0' || (value !== null && value !== undefined && value !== '')) {
+                            filledFields++;
+                        }
+                    });
                 });
-            });
+                
+                shopifyCompleteness = Math.round((filledFields / totalFields) * 100);
+            }
             
-            shopifyCompleteness = Math.round((filledFields / totalFields) * 100);
-        }
-        
-        // BC adatteljesség számítása
-        let bcCompleteness = 0;
-        if (bcProducts && bcProducts.length > 0) {
-            const relevantFields = [
-                'Szám', 'Megnevezés', 'Termékkategória', 
-                'Terület', 'Kiszerelés', 'Évjárat'
-            ];
-            
-            let filledFields = 0;
-            let totalFields = bcProducts.length * relevantFields.length;
-            
-            bcProducts.forEach(product => {
-                relevantFields.forEach(field => {
-                    // Ellenőrizzük, hogy az érték létezik-e és nem üres
-                    // A 0 értékeket érvényesnek tekintjük
-                    const value = product[field];
-                    if (value === 0 || value === '0' || (value !== null && value !== undefined && value !== '')) {
-                        filledFields++;
-                    }
+            // BC adatteljesség számítása
+            let bcCompleteness = 0;
+            if (bcProducts && bcProducts.length > 0) {
+                const relevantFields = [
+                    'Szám', 'Megnevezés', 'Termékkategória', 
+                    'Terület', 'Kiszerelés', 'Évjárat'
+                ];
+                
+                let filledFields = 0;
+                let totalFields = bcProducts.length * relevantFields.length;
+                
+                bcProducts.forEach(product => {
+                    relevantFields.forEach(field => {
+                        const value = product[field];
+                        if (value === 0 || value === '0' || (value !== null && value !== undefined && value !== '')) {
+                            filledFields++;
+                        }
+                    });
                 });
-            });
+                
+                bcCompleteness = Math.round((filledFields / totalFields) * 100);
+            }
             
-            bcCompleteness = Math.round((filledFields / totalFields) * 100);
+            // 5. Prepare stats
+            const stats = {
+                totalShopify: normalizedProducts.length || 0,
+                totalBC: bcCount || 0,
+                shopifyCompleteness: shopifyCompleteness,
+                bcCompleteness: bcCompleteness
+            };
+            
+            // 6. Prepare display data
+            const displayShopifyProducts = normalizedProducts.map(p => ({
+                'Product Handle': p['Product Handle'],
+                'Title': p['Title'],
+                'SKU': p['SKU'],
+                'Brand': p['Brand'],
+                'Product Type (Custom)': p['Product Type (Custom)'],
+                'Származási hely': p['Származási hely'],
+                'Kiszerelés': p['Kiszerelés'],
+                'Alkoholtartalom': p['Alkoholtartalom'],
+                'normalizalt_szolofajtak': p['normalizalt_szolofajtak'],
+                'erlelesi_kategoria': p['erlelesi_kategoria'],
+                'erlelesi_alkategoria': p['erlelesi_alkategoria'],
+                'Évjárat': p['Évjárat']
+            }));
+            
+            const displayBcProducts = bcProducts.map(p => ({
+                'Szám': p['Szám'],
+                'Megnevezés': p['Megnevezés'],
+                'Termékkategória': p['Termékkategória'],
+                'Terület': p['Terület'],
+                'Kiszerelés': p['Kiszerelés'],
+                'Évjárat': p['Évjárat']
+            }));
+            
+            // 7. Render the tables
+            renderCompareTable(stats, displayShopifyProducts, displayBcProducts, shopifyLastUpdated, bcLastUpdated);
         }
-
-        // 5. Prepare stats (using total counts and completeness)
-        const stats = {
-            totalShopify: shopifyCount || 0,
-            totalBC: bcCount || 0,
-            shopifyCompleteness: shopifyCompleteness,
-            bcCompleteness: bcCompleteness
-        };
-
-        // Szűkítsük le a megjelenítendő adatmezőket
-        const displayShopifyProducts = shopifyProducts.map(p => ({
-            'Product Handle': p['Product Handle'],
-            'Title': p['Title'],
-            'SKU': p['SKU'],
-            'Brand': p['Brand'],
-            'Product Type (Custom)': p['Product Type (Custom)'],
-            'Származási hely': p['Származási hely'],
-            'Kiszerelés': p['Kiszerelés'],
-            'Alkoholtartalom': p['Alkoholtartalom'],
-            'Évjárat': p['Évjárat']
-        }));
-
-        const displayBcProducts = bcProducts.map(p => ({
-            'Szám': p['Szám'],
-            'Megnevezés': p['Megnevezés'],
-            'Termékkategória': p['Termékkategória'],
-            'Terület': p['Terület'],
-            'Kiszerelés': p['Kiszerelés'],
-            'Évjárat': p['Évjárat']
-        }));
-
-        // 6. Render the tables with ALL sorted products and last updated dates
-        renderCompareTable(stats, displayShopifyProducts, displayBcProducts, shopifyLastUpdated, bcLastUpdated); 
-
     } catch (error) {
         console.error('Hiba az összehasonlító nézet betöltése közben:', error);
         appContent.innerHTML = `<p class="text-danger">Hiba történt az összehasonlító nézet betöltése közben: ${error.message}</p>`;
@@ -1510,7 +2136,7 @@ async function populateDataBadges() {
         // Létrehozzuk a badge-eket
         displayFields.forEach(field => {
             const badge = document.createElement('span');
-            badge.className = 'badge bg-secondary rounded-pill p-2 px-3 m-1';
+            badge.classList.add('badge', 'bg-secondary', 'rounded-pill', 'p-2', 'px-3', 'm-1');
             badge.textContent = field;
             badgeContainer.appendChild(badge);
         });
@@ -1520,19 +2146,19 @@ async function populateDataBadges() {
             // Létrehozzuk a további mezők tárolóját
             const additionalFieldsContainer = document.createElement('div');
             additionalFieldsContainer.id = 'additional-fields';
-            additionalFieldsContainer.className = 'w-100 mt-2 d-none';
+            additionalFieldsContainer.classList.add('w-100', 'mt-2', 'd-none');
             
             // Hozzáadjuk a további mezőket
             sortedFields.slice(15).forEach(field => {
                 const item = document.createElement('span');
-                item.className = 'badge bg-secondary rounded-pill p-2 px-3 m-1';
+                item.classList.add('badge', 'bg-secondary', 'rounded-pill', 'p-2', 'px-3', 'm-1');
                 item.textContent = field;
                 additionalFieldsContainer.appendChild(item);
             });
             
             // Létrehozzuk a mutató gombot
             const toggleButton = document.createElement('button');
-            toggleButton.className = 'badge bg-dark rounded-pill p-2 px-3 m-1 border-0';
+            toggleButton.classList.add('badge', 'bg-dark', 'rounded-pill', 'p-2', 'px-3', 'm-1', 'border-0');
             toggleButton.id = 'toggle-fields-btn';
             toggleButton.innerHTML = `<i class="bi bi-plus-circle me-1"></i> és még ${sortedFields.length - 15} mező`;
             toggleButton.style.cursor = 'pointer';
@@ -1576,7 +2202,7 @@ function displayFallbackBadges() {
     badgeContainer.innerHTML = '';
     fallbackFields.forEach(field => {
         const badge = document.createElement('span');
-        badge.className = 'badge bg-secondary rounded-pill p-2 px-3 m-1';
+        badge.classList.add('badge', 'bg-secondary', 'rounded-pill', 'p-2', 'px-3', 'm-1');
         badge.textContent = field;
         badgeContainer.appendChild(badge);
     });
